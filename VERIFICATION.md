@@ -1,6 +1,30 @@
-# Day 2 verification
+# Day 3 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using Node 26.2.0 and npm 11.13.0.
+
+## Day 3 actual results
+
+| Command / check | Result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; including word-memory contract fixtures |
+| `npm test` | PASS; **55 tests, 0 failures**: all original 18 plus 37 ISA/parser/editor-alignment tests |
+| `npm run build` | PASS; compilation, TypeScript, static page generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| Production HTTP checks | PASS; root page, local Monaco worker, and 8 root client scripts return 200 |
+| Server UI state | PASS; ISA v1 label/restoration placeholder present; all 5 execution buttons remain disabled |
+| Existing Monaco patch | PASS; final client chunks contain DOMPurify 3.4.17 and no 3.4.15 string; preparation script/override unchanged |
+| Browser checks | NOT RUN; discovery returned no browsers/apps |
+
+No dependency, runtime, or browser binary was downloaded/installed. Package manifests/lockfile and the original 18 tests are unchanged. Node 24 is unavailable: checks used existing **Node 26.2.0**, outside the configured 24.x engine; Node 24 validation remains pending. Native Node tests use explicit .ts module imports, enabled in TypeScript's no-emit configuration, without adding a transpiler.
+
+New coverage includes all 19 opcode/mnemonic mappings, operand counts/kinds/addressing metadata, unsupported opcodes, labels/inline labels, unresolved forward references and deferred duplicate/undefined symbols, signed decimal/hex and both numeric range boundaries, data as a separate numeric directive, comments/blank lines/BOM/CRLF/CR, malformed tokens, exact exclusive UTF-16 spans, insertion spans for missing operands, and ordered multi-line recovery. A deterministic 300-case malformed-input sweep checks that parsing does not throw or lose the following valid line. Every shipped example parses, and Monaco's instruction keyword pattern is checked against the same 19 definitions.
+
+`docs/ISA_DESIGN.md` is now the finalized ISA v1 specification. Instruction behavior is documented, **not executed or emulated by the tests**. The parser returns syntax statements/diagnostics only; it does not resolve names, assign word addresses, encode bytes, or evaluate programs/tests. Its diagnostics are not yet connected to the editor's Errors panel. Existing saved drafts are preserved even when they use old MOV/HLT syntax.
+
+Manual checks pending: load each new example through the existing replacement confirmation; inspect mnemonic/label/comment/number/data highlighting and absence of unsupported-opcode highlighting; review all 19 Info entries and long-section scrolling/focus at desktop and narrow widths; verify autosave, file actions, shortcuts, and dialogs still behave normally; check browser console/network for hydration, chunk, or worker errors. HTTP/build checks do not establish browser behavior. No live execution/assembly results were produced.
+
+The production verification server was stopped. No commits, pushes, GitHub/Vercel operations, or Day 4 implementation occurred. Earlier Day 2 findings below are historical; their 18-test count, draft-contract wording, and pending-ISA boundary describe that earlier state.
 
 ## Deployment warning review
 

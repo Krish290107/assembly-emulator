@@ -129,6 +129,9 @@ svg { flex-shrink: 0; }
 .doc-section h3 { display: flex; gap: 11px; align-items: center; font-size: 13px; color: #d5e0f0; font-weight: 500; margin: 0 0 12px; }
 .doc-section h3 span { font-size: 10px; font-family: Consolas, monospace; color: #7691b8; }
 .doc-section p { color: #9eaec4; line-height: 1.85; font-size: 12px; margin: 8px 0 0; }
+.instruction-reference > div { padding: 11px 0; border-bottom: 1px solid var(--border); }
+.instruction-reference h4 { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin: 0; font-size: 12px; color: #c3d8f5; }
+.instruction-reference h4 span { font-size: 10px; font-weight: 400; color: var(--muted); }
 .drawer-footer { min-height: 40px; border-top: 1px solid #2d3b51; display: flex; align-items: center; justify-content: space-between; padding: 0 25px; color: #7d95b7; font-size: 9px; letter-spacing: .6px; }
 .drawer-footer span { letter-spacing: 0; color: #91a0b7; }
 .planned-test { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid #2b394d; }

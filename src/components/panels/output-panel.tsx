@@ -11,9 +11,9 @@ export interface OutputPanelProps {
 
 const TABS = [
   { id: "output", title: "Output", icon: Terminal, heading: "Your program output will appear here", text: "The execution engine is not implemented yet. For now, write and save your source." },
-  { id: "errors", title: "Errors", icon: CircleAlert, heading: "No diagnostics available", text: "Source validation will be available with the assembler. Your program has not been checked." },
+  { id: "errors", title: "Errors", icon: CircleAlert, heading: "No diagnostics available", text: "The parser is not connected to this panel yet. Your editor source has not been checked." },
   { id: "trace", title: "Execution Trace", icon: ListTree, heading: "No execution trace", text: "Instructions will appear here when the execution engine supports stepping." },
-  { id: "disassembly", title: "Disassembly", icon: Braces, heading: "No disassembly available", text: "Machine code and disassembly depend on the finalized ISA and encoding." },
+  { id: "disassembly", title: "Disassembly", icon: Braces, heading: "No disassembly available", text: "ISA v1 is specified. Machine-code generation and disassembly are not implemented yet." },
 ] as const;
 
 export function OutputPanel() {

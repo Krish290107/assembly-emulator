@@ -1,4 +1,4 @@
-// Transport contracts only; numeric ranges and instruction semantics await Day 3.
+// Runtime behavior is specified in docs/ISA_DESIGN.md; no engine is implemented.
 export type RegisterName = "A" | "B" | "PC" | "SP";
 
 export interface SourceLocation {
@@ -19,17 +19,17 @@ export interface Diagnostic {
   source?: SourceRange;
 }
 
-export type ValueReference = { kind: "literal"; value: number } | { kind: "symbol"; name: string };
 export type Operand = (
-  | { kind: "register"; register: RegisterName }
   | { kind: "immediate"; value: number }
   | { kind: "symbol"; name: string }
-  | { kind: "memory"; address: ValueReference }
 ) & { source: SourceRange };
 
 export interface InstructionDefinition {
   mnemonic: string;
-  operandKinds: readonly (readonly Operand["kind"][])[];
+  opcode: number;
+  operandKinds: readonly [] | readonly [readonly Operand["kind"][]];
+  operandMode: "none" | "absolute" | "relative";
+  effect: string;
   description: string;
 }
 
@@ -51,7 +51,7 @@ export type AssemblyResult =
 
 export interface CpuState {
   registers: Record<RegisterName, number>;
-  memory: Uint8Array;
+  memory: Int32Array;
 }
 
 export interface CpuSnapshot {

@@ -15,12 +15,12 @@ export function EditorPane(props: AssemblyEditorProps & { filename: string; revi
     <section className="editor-pane" aria-label="Source editor">
       <div className="editor-tabbar">
         <div className="file-tab"><FileCode2 size={15} /><span title={props.filename}>{props.filename}</span>{props.modified && <span className="modified-dot" title="Source is being autosaved" />}</div>
-        <span className="editor-language">Assembly <span className="draft-tag">DRAFT ISA</span></span>
+        <span className="editor-language">Assembly <span className="draft-tag">ISA v1</span></span>
       </div>
       <div className="editor-surface">
         {props.ready ? <EditorBoundary key={props.revision} code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange}><AssemblyEditor code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange} /></EditorBoundary> : <div className="editor-loading" role="status">Restoring your workspace…</div>}
       </div>
-      <div className="editor-footnote"><span>Provisional syntax</span><span>Instruction set will be defined in Days 3–5.</span></div>
+      <div className="editor-footnote"><span>ISA v1</span><span>Highlighting does not validate source. Assembly and execution are unavailable.</span></div>
     </section>
   );
 }

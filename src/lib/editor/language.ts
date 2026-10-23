@@ -1,6 +1,10 @@
 type Monaco = typeof import("monaco-editor");
+import { INSTRUCTIONS } from "../assembler/isa.ts";
 
-export const LANGUAGE_ID = "assembly-draft";
+export const LANGUAGE_ID = "assembly-isa-v1";
+export const MNEMONIC_PATTERN = new RegExp(`\\b(${INSTRUCTIONS.map(({ mnemonic }) => mnemonic).join("|")})\\b`, "i");
+export const LABEL_PATTERN = /[A-Za-z_][A-Za-z0-9_]*(?=\s*:)/;
+export const NUMBER_PATTERN = /[+-]?(?:0[xX][\da-fA-F]+|\d+)\b/;
 
 export function configureAssembly(monaco: Monaco) {
   if (!monaco.languages.getLanguages().some(({ id }) => id === LANGUAGE_ID)) {
@@ -10,19 +14,17 @@ export function configureAssembly(monaco: Monaco) {
       tokenizer: {
         root: [
           [/;.*/, "comment"],
-          [/[a-z_]\w*(?=\s*:)/, "type.identifier"],
-          [/\b(MOV|ADD|SUB|INC|DEC|CMP|JMP|JZ|JNZ|PUSH|POP|CALL|RET|NOP|HLT|LOAD|STORE)\b/, "keyword"],
-          [/\b(A|B|PC|SP)\b/, "variable.predefined"],
-          [/\b0x[\da-f]+\b|\b0b[01]+\b|\b\d+\b/, "number"],
-          [/"[^"\n]*"|'[^'\n]*'/, "string"],
-          [/[,:\[\]]/, "delimiter"],
+          [LABEL_PATTERN, "type.identifier"],
+          [MNEMONIC_PATTERN, "keyword"],
+          [/\bdata\b/, "keyword.directive"],
+          [NUMBER_PATTERN, "number"],
+          [/[A-Za-z_][A-Za-z0-9_]*/, "identifier"],
+          [/:/, "delimiter"],
         ],
       },
     });
     monaco.languages.setLanguageConfiguration(LANGUAGE_ID, {
       comments: { lineComment: ";" },
-      brackets: [["[", "]"], ["(", ")"]],
-      autoClosingPairs: [{ open: "[", close: "]" }, { open: "(", close: ")" }, { open: '"', close: '"' }],
     });
   }
   monaco.editor.defineTheme("assembly-dark", {
@@ -31,10 +33,9 @@ export function configureAssembly(monaco: Monaco) {
     rules: [
       { token: "comment", foreground: "738296" },
       { token: "keyword", foreground: "8EB7FA" },
-      { token: "variable.predefined", foreground: "D6B6F2" },
+      { token: "keyword.directive", foreground: "D6B6F2" },
       { token: "number", foreground: "D5BA86" },
       { token: "type.identifier", foreground: "88C8C0" },
-      { token: "string", foreground: "ABC99A" },
     ],
     colors: {
       "editor.background": "#10151e",

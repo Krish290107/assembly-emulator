@@ -45,14 +45,14 @@ export function FileToolbar({ ready, uploading, onUploadingChange, onReplace, on
         <button className="tool-button" disabled={busy} title="Download current source (Ctrl+S)" aria-keyshortcuts="Control+S" onClick={onDownload}><Download /><span>Download</span></button>
         <span className="toolbar-divider" />
         <div className="example-select">
-          <label htmlFor={selectId} className="sr-only">Load a provisional example</label>
+          <label htmlFor={selectId} className="sr-only">Load an ISA v1 example</label>
           <BookOpen size={15} aria-hidden="true" />
           <select id={selectId} disabled={busy} value="" onChange={(event) => {
             const example = EXAMPLES.find(({ id }) => id === event.target.value);
             if (example) onReplace({ code: example.code, filename: example.filename });
           }}>
             <option value="" disabled>Examples</option>
-            {EXAMPLES.map((example) => <option key={example.id} value={example.id}>{example.title} (provisional)</option>)}
+            {EXAMPLES.map((example) => <option key={example.id} value={example.id}>{example.title}</option>)}
           </select>
           <ChevronDown size={12} aria-hidden="true" />
         </div>
