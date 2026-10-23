@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CircleHelp, Code2, Terminal, X } from "lucide-react";
 import { useSourceDocument } from "@/lib/editor/use-source-document";
 import { handleIdeShortcut } from "@/lib/editor/shortcuts";
+import { handleDebuggerShortcut } from "@/lib/workspace/shortcuts";
 import { useExecution } from "@/lib/workspace/use-execution";
 import type { OutputTab, SourceDocument, ToolPanel } from "@/types/ide";
 import { EditorPane } from "@/components/editor/editor-pane";
@@ -37,11 +38,15 @@ export function IdeWorkspace() {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const sourceInput = target.closest(".monaco-editor .inputarea, .monaco-editor .native-edit-context, .editor-fallback textarea");
-      handleIdeShortcut(event.nativeEvent, {
+      const shortcutContext = {
         active: source.ready && !uploading && event.currentTarget.contains(window.document.activeElement),
         dialogOpen: panel !== null || !!event.currentTarget.querySelector("dialog[open]"),
         unrelatedInput: !sourceInput && !!target.closest("input, textarea, select, [contenteditable], [role='textbox']"),
-      }, { download: source.download, create: () => replaceDocument({ code: "", filename: "untitled.asm" }) });
+      };
+      if (handleDebuggerShortcut(event.nativeEvent, { ...shortcutContext, sourceInput: !!sourceInput, sourceLine: position.line }, controller.getSnapshot(), {
+        run: controller.run, step: controller.step, reset: controller.reset, breakpoint: controller.toggleBreakpoint,
+      })) { event.stopPropagation(); return; }
+      handleIdeShortcut(event.nativeEvent, shortcutContext, { download: source.download, create: () => replaceDocument({ code: "", filename: "untitled.asm" }) });
     }}>
       <a className="skip-link" href="#workspace">Skip to workspace</a>
       <header className="app-header">

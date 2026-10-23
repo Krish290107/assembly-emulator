@@ -9,6 +9,7 @@ export const MEMORY_WINDOW = 32;
 export const DISASSEMBLY_WINDOW = 64;
 export const SPEEDS = { slow: { batch: 1, delay: 200 }, normal: { batch: 64, delay: 32 }, fast: { batch: 512, delay: 16 } } as const;
 export type ExecutionSpeed = keyof typeof SPEEDS;
+export const DEFAULT_SPEED: ExecutionSpeed = "normal";
 export interface Scheduler { schedule: (callback: () => void, delay: number) => unknown; cancel: (handle: unknown) => void }
 export interface MemoryRow { address: number; value: number; hex: string; changed: boolean }
 export interface CodeRow { address: number; hex: string; instruction: string; line?: number; source: string; modified: boolean }
@@ -42,7 +43,7 @@ export interface WorkspaceView {
 export const INITIAL_VIEW: WorkspaceView = {
   status: "unassembled", running: false, assembled: false, wordCount: 0, symbolCount: 0,
   cpu: null, changedRegisters: [], diagnostics: [], logs: ["Assemble source to prepare a CPU. Nothing has executed."],
-  memoryStart: 0, memory: [], disassemblyStart: 0, disassembly: [], speed: "normal",
+  memoryStart: 0, memory: [], disassemblyStart: 0, disassembly: [], speed: DEFAULT_SPEED,
   breakpoints: [], trace: [], traceDiscarded: 0,
 };
 
@@ -79,7 +80,7 @@ export function createWorkspaceController(scheduler: Scheduler) {
   let disposed = false;
   let memoryStart = 0;
   let disassemblyStart = 0;
-  let speed: ExecutionSpeed = "normal";
+  let speed: ExecutionSpeed = DEFAULT_SPEED;
   let assemblyDiagnostics: readonly Diagnostic[] = [];
   let logs = [...INITIAL_VIEW.logs];
   let view: WorkspaceView = { ...INITIAL_VIEW, logs: [...INITIAL_VIEW.logs] };
@@ -299,7 +300,7 @@ export function createWorkspaceController(scheduler: Scheduler) {
     },
     reset() {
       if (!cpu || !program) return;
-      cancel(); resetCpu(cpu); clearHistory(); resolveBreakpoints(); log("Reset loaded image and registers. Attempts: 0."); publish();
+      cancel(); resetCpu(cpu); speed = DEFAULT_SPEED; clearHistory(); resolveBreakpoints(); log("Reset loaded image and registers. Attempts: 0. Speed: Normal."); publish();
     },
     setSpeed(next: ExecutionSpeed) {
       if (!Object.hasOwn(SPEEDS, next) || speed === next) return;

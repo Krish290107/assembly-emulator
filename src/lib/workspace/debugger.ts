@@ -1,7 +1,9 @@
 import { parseSource } from "../assembler/parser.ts";
 import { isValidImageSize } from "../cpu/validation.ts";
-import type { Breakpoint, MachineCode, SourceRange } from "../../types/engine.ts";
-import type { CpuAttemptTrace } from "../../types/cpu.ts";
+import type { Breakpoint, Diagnostic, MachineCode, SourceRange } from "../../types/engine.ts";
+import type { CpuAttemptTrace, CpuOverview, RuntimeDiagnostic } from "../../types/cpu.ts";
+import { decodeInstruction } from "../cpu/decoder.ts";
+import { getInstruction } from "../assembler/isa.ts";
 
 export interface SourceBreakpoint extends Breakpoint {
   resolution: "pending" | "resolved" | "non-executable";
@@ -18,6 +20,51 @@ export const TRACE_FILTERS = [
   { value: "terminal", label: "Faults / terminal events" },
 ] as const;
 export type TraceFilter = (typeof TRACE_FILTERS)[number]["value"];
+
+/** Export all retained records, independent of presentation filters. No CPU access. */
+export function traceDownload(input: { trace: readonly CpuAttemptTrace[]; traceDiscarded: number; cpu: CpuOverview | null }): { filename: string; blob: Blob } {
+  const payload = {
+    format: "assembly-emulator-trace", version: 1,
+    attemptedInstructions: input.cpu?.attemptedInstructions ?? 0,
+    retention: {
+      capacity: TRACE_CAPACITY, retained: input.trace.length, discardedSinceClear: input.traceDiscarded,
+      limitation: "Only retained recorded attempts are exported (last 500). Discarded or cleared history is unavailable; filters do not limit this export.",
+    },
+    entries: input.trace.map((entry) => ({
+      attempt: entry.step, pc: entry.address, word: entry.word ?? null,
+      instruction: entry.decoded ? { mnemonic: entry.decoded.mnemonic, opcode: entry.decoded.opcode, operand: entry.decoded.operand } : null,
+      instructionText: entry.instruction, before: entry.before, after: entry.after,
+      memoryWrite: entry.memoryWrite ?? null, result: entry.status, error: entry.diagnostic ?? null,
+      source: entry.source ?? null, modified: entry.modified,
+    })),
+  };
+  return { filename: "assembly-emulator-trace.json", blob: new Blob([JSON.stringify(payload, null, 2) + "\n"], { type: "application/json;charset=utf-8" }) };
+}
+
+/** Explain existing structured errors without changing codes, spans or CPU semantics. */
+export function runtimeDiagnosticContext(diagnostic: Diagnostic, cpu?: CpuOverview | null): string {
+  if (diagnostic.code === "UI_EXECUTION_LIMIT") return cpu ? `Stopped PC ${cpu.registers.PC} · ${cpu.attemptedInstructions} attempted instructions.` : "";
+  if (!/^C\d{3}_/.test(diagnostic.code)) return "";
+  const { address, word, target } = diagnostic as Partial<RuntimeDiagnostic>;
+  const parts: string[] = [];
+  if (address !== undefined) parts.push(`PC ${address}`);
+  if (word !== undefined) {
+    const decoded = decodeInstruction(word);
+    if (decoded.ok) {
+      const { mnemonic, operand } = decoded.value;
+      parts.push(`${mnemonic}${getInstruction(mnemonic)!.operandMode === "none" ? "" : ` ${operand}`}`);
+    }
+    if (Number.isInteger(word) && word >= -2147483648 && word <= 0xffffffff) {
+      parts.push(`word ${(word >>> 0).toString(16).toUpperCase().padStart(8, "0")}`);
+      if (!decoded.ok) parts.push(`opcode ${word & 0xff}, operand bits ${word >> 8}`);
+    } else parts.push(`word ${word}`);
+  }
+  if (target !== undefined) {
+    const label = { C005_INVALID_ADDRESS: "Memory address", C012_INVALID_SP: "SP", C013_INVALID_SHIFT: "Shift count", C014_INVALID_TARGET: "Target PC" }[diagnostic.code];
+    parts.push(`${label ?? "Target"} ${target}`);
+  }
+  return parts.join(" · ");
+}
 
 /** Presentation only: classify actual decoded instructions and committed results. */
 export function filterTrace(entries: readonly CpuAttemptTrace[], filter: TraceFilter): readonly CpuAttemptTrace[] {

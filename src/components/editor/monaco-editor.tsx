@@ -77,7 +77,8 @@ export default function AssemblyEditor({ code, onChange, onPositionChange, diagn
       if (event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !event.target.position) return;
       event.event.preventDefault(); onToggleBreakpoint(event.target.position.lineNumber);
     });
-    const action = instance.addAction({ id: "assembly.toggleBreakpoint", label: "Toggle source breakpoint", keybindings: [monaco.KeyCode.F9], run: (editor) => { const position = editor.getPosition(); if (position) onToggleBreakpoint(position.lineNumber); } });
+    // F9 is handled once by the IDE capture handler, including repeat guards.
+    const action = instance.addAction({ id: "assembly.toggleBreakpoint", label: "Toggle source breakpoint (F9)", run: (editor) => { const position = editor.getPosition(); if (position) onToggleBreakpoint(position.lineNumber); } });
     return () => { mouse.dispose(); action.dispose(); };
   }, [instance, onToggleBreakpoint]);
 

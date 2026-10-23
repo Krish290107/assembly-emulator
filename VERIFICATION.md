@@ -1,3 +1,56 @@
+# Day 11 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` with existing **Node 26.12.1 / npm 11.20.0** (`C:\Program Files\nodejs\node.exe`). Node 24.x was not available on PATH, in project tools, or the checked version-manager locations. **Node 24.x remains the target and is unverified**; no runtime was downloaded or changed.
+
+## Day 11 actual results
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS |
+| `npm test` | PASS; **373 tests, 0 failures**, all existing 341 unchanged plus 32 Day 11 tests; none skipped |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript and static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Browser automation | NOT RUN; computer-use discovery returned no apps or browsers |
+
+The user reports Day 10 browser verification passed. Day 11 browser checks below remain pending. Server rendering and handler tests do not verify physical keyboard delivery, pointer behavior, scrolling, responsive layout or completed downloads. No dependencies, frameworks, browser binaries or runtimes were installed/downloaded; the requested audit fetched advisory metadata only. No dependencies/configuration were upgraded or changed.
+
+## Files and debugger behavior
+
+Created `src/lib/workspace/shortcuts.ts` and `tests/debugger-finalization.test.mjs`. Modified `src/lib/workspace/controller.ts`, `src/lib/workspace/debugger.ts`, `src/components/editor/monaco-editor.tsx`, `src/components/layout/ide-workspace.tsx`, `src/components/toolbar/execution-toolbar.tsx`, `src/components/panels/debugger-panel.tsx`, `src/components/panels/memory-panel.tsx`, `src/components/panels/output-panel.tsx`, `src/components/panels/tool-panel.tsx`, `src/app/globals.css`, `README.md`, and this record. CPU/assembler/ISA/types, the React execution adapter, existing tests, dependencies/lockfile and generated Monaco preparation logic are unchanged. No generated worker was edited.
+
+F5 runs/resumes, F10 attempts one instruction, Shift+F5 resets and source-editor F9 toggles a breakpoint. The IDE capture handler runs before Monaco and stops propagation for handled debugger keys, so Monaco cannot trigger a second command. Its separate shortcut helper leaves existing Ctrl+S/Ctrl+N behavior untouched. Autorepeat is consumed without invoking another action. Active/ready IDE focus, dialog/input/composition/modifier checks scope commands; F9 additionally requires source-editor focus and a valid line. Disabled/terminal commands consume the scoped IDE key without executing or refreshing the page. Outside the IDE, dialogs and unrelated inputs, native browser keys remain untouched. Controller state is read at event time. The old Monaco F9 keybinding was removed to avoid duplicate paths; its named editor action remains. Tooltips and aria-keyshortcuts expose execution keys.
+
+The audit confirmed speed controls were hidden at narrow widths; they now remain visible when the toolbar wraps. Reset now restores the documented **Normal** default while preserving permanent breakpoint definitions and source. Slow/Normal/Fast remain maximum batches **1/64/512** with requested delays **200/32/16 ms**; changes cancel/reschedule the existing one-session scheduler and do not change semantics or budgets. Pause, Reset, source replacement and disposal still invalidate late callbacks. The breakpoint list explicitly marks the current hit, independently of the blue active-PC indication and enabled/disabled gutter dots.
+
+Memory still reads/displays at most **32 cells** through checked access, with signed decimal and hex values. Program navigation returns to word 0; PC/SP and Previous/Next remain. Jump accepts decimal/hex addresses 0–65,535; invalid values neither wrap nor change the window. At 65,535 only the final cell is displayed. Empty-stack SP shows the final 32 cells. Existing PC background styling could mask a changed-memory background at the same cell; an independently labeled changed-value dot now preserves that signal. No full-memory copies or rendering were added.
+
+Download Trace creates `assembly-emulator-trace.json` from **all retained recorded entries**, independent of filters/selection. Format version 1 contains original attempt/PC/fetched word, decoded mnemonic/opcode/operand or null for invalid bits, before/after registers, committed memory deltas, actual result/error/source and modification flags. Metadata records cumulative attempts, the **500-entry cap**, retained count and discarded count since clear, explicitly excluding discarded/cleared history. Serialization selects compact fields and cannot include the legacy optional memory snapshot. Cleared history is not reconstructed, later attempts are not renumbered, and export does not publish or mutate CPU state. Object URLs are revoked after the local download request; their cleanup timer does not execute CPU work or update React state. The filename is fixed and safe; failure/request feedback is shown. No CSV, external service or replay/import capability was added.
+
+Runtime error presentation reuses structured diagnostics and the real decoder. Errors retain their codes/messages/source spans, adding PC, fetched instruction/hex word and relevant memory address/SP/target PC/shift count where available. Invalid encodings show raw bits/opcode rather than an invented decode. Execution-limit context reports stopped PC and cumulative attempts without claiming an extra fetch. CPU validation/commit semantics and fault-versus-HALT/limit precedence are unchanged; runtime faults remain atomic and terminal, with no successful-execution message afterward.
+
+## Regression evidence
+
+All **32 new tests** use real assembler/CPU execution; only scheduling and UI event delivery are simulated. They cover key mapping/scoping, modifier/browser exclusions, held keys, unassembled/busy/terminal states, rapid Step, Ctrl+S/Ctrl+N preservation, keyboard breakpoint/Run-to-Cursor interactions, Reset races/default speed, speed rescheduling, pause/source/disposal cancellation, memory endpoints/invalid inputs, compact JSON accuracy/store/fault/self-modification fields, filter/selection/export isolation, eviction/clearing IDs, immutable exported history across reset, runtime context for memory/SP/branch/shift/opcode/encoding faults, and exact limit context/export. Real TSX rendering checks shortcut labels, speed selection, changed/PC memory markers, Program navigation, breakpoint-hit markup and download-button states.
+
+Five assembled programs (addition, stack store/load, call/return, memory fault, self-modification) produce identical final registers/status/attempt counts, relevant low/high memory windows and complete compact histories across Slow/Normal/Fast, with export/selection leaving live state unchanged. Existing full CPU snapshot equivalence, loop, breakpoint, source invalidation, terminal precedence and Day 9 selection regressions remain unchanged and pass. A default-budget loop exports exactly attempts **99,501–100,000**, reports **99,500 discarded**, and includes the final limit-reached attempt with no extra instruction.
+
+## Focused manual Brave checklist
+
+1. In Monaco and fallback source editors, assemble `ldc 10 / adc 5 / HALT` on separate lines. F10 should give A=10/one attempt; hold F10 and confirm no additional attempts from autorepeat. F5 should finish at A=15, PC=2, SP=65,536, three attempts. F5/F10 at terminal state must not execute or refresh. Shift+F5 resets attempts/history and speed to Normal. F9 toggles once per press, including before assembly; hold it to verify no flicker/repeated toggles. Check toolbar tooltips.
+2. Verify key scoping in Info/Test Cases dialogs, Monaco find fields, memory/breakpoint inputs, speed selects and outside the IDE. Ctrl+S/Ctrl+N retain existing source download/guarded Create behavior. Modified F-keys such as Shift+F10 retain browser behavior. In loop breakpoints, confirm hit labels, red dots versus blue PC, one-time Resume bypass, Step, removal/clear and Run-to-Cursor cancellation.
+3. At desktop and narrow/mobile widths, confirm Slow/Normal/Fast remain visible and the toolbar wraps without covering the editor. Change speed while running, Pause, rapidly Run/Pause/Step/Reset, and edit/replace source or leave the workspace. No stale goal/session or duplicate attempt should appear. Reset must restore Normal, source and breakpoint definitions retained.
+4. Jump to 0, 0xFFFF/65,535, Program, PC and SP; verify decimal/hex, bounded rows, final-cell/empty-stack behavior and graceful invalid inputs such as -1/65,536. Use the self-modifying cursor example to confirm a changed-value dot remains visible on the PC row. Recheck memory scrolling and small-panel readability.
+5. In Execution Trace, select/filter entries, then Download Trace. Confirm the safe JSON filename and all retained rows regardless of filter, original attempt numbers, before/after registers, real store deltas and fault/HALT data, plus 500-entry/discard metadata. At more than 500 attempts and after Clear trace, confirm no invented older rows or renumbering. Download/inspection must not change live state. Recheck row clicks, Enter/Space, Previous/Next, detail reveal, eviction and source navigation.
+6. Run memory/SP/branch/shift/unsupported-opcode faults and `br -1` to its limit. Confirm readable code/source/PC/instruction/target context, no successful result after error, and Reset clearing diagnostics. Recheck autosave, upload/download, undo/redo, local Monaco worker loading, dialogs and existing controls. Test Cases actions remain disabled.
+
+## Day 11 boundary
+
+Day 11 implementation and automated verification are complete, with **Node 24 and Day 11 Brave checks pending**. This is the tested baseline for Days 12–13; **Day 12/custom test-case execution has not started**. No required files/tests were deleted. No commits, pushes, deployments, GitHub/Vercel operations, time-travel execution, memory watchpoints, backend/database/authentication or AI features were added.
+
+The Day 10 and earlier records below are historical, including their earlier speed-reset and shortcut descriptions.
+
 # Day 10 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` with existing **Node 26.12.1 / npm 11.20.0**. The executable on PATH is `C:\Program Files\nodejs\node.exe`; no Node 24 executable was found in the project tools or checked version-manager locations. **Node 24.x remains the deployment target and is unverified.** No runtime was downloaded or switched.
