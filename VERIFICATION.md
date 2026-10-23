@@ -1,4 +1,45 @@
-# Day 6 verification
+# Day 7 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` with existing **Node 26.2.0 / npm 11.13.0**. The available executable remains the existing system Node installation. **Node 24.x is the project target and remains unavailable for verification**; no runtime was downloaded or switched.
+
+## Day 7 actual results
+
+| Command / check | Result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; all existing engine/CPU type fixtures retained |
+| `npm test` | PASS; **234 tests, 0 failures**: all 168 existing tests plus 66 execution tests; none skipped |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript, static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Browser/UI interaction | NOT RUN; UI, editor, Info/Test Cases panels, file handling, examples, and controls unchanged |
+
+Created `src/lib/cpu/execution.ts` and `tests/execution.test.mjs`. Updated `cpu/index.ts` for shared execution/lifecycle handling, `cpu/decoder.ts` to share checked fetch, `cpu/diagnostics.ts` and `src/types/cpu.ts` for execution results/diagnostics, an engine comment, README, ISA documentation, and this record. Assembler, parser, ISA metadata/constants, loader/reset semantics, all existing tests/type fixtures, package manifests/lockfile, and configuration are preserved. No UI actions were enabled.
+
+`stepCpu(cpu)` and `runCpuBatch(cpu, maxSteps)` use one private attempt/commit path and return detached status/per-call attempts/cumulative attempts/diagnostics, without memory snapshots per step. Instruction preparation reads pre-instruction values and stages candidate registers and at most one word store. Only fully validated effects commit. All 19 instructions execute according to the unchanged ISA; arithmetic wraps signed 32-bit values, validated shifts use exact bit operations, and address/SP/PC arithmetic never wraps. Calls save original PC in A and old A in B; return uses old A+1 and old B. Conditional branches do not pop registers; untaken targets are ignored. No implicit stack operations, flags, sections, breakpoints, or trace recording were added.
+
+Runtime faults count their attempt, preserve all instruction registers and memory, retain faulting PC, append a structured diagnostic, and set error. Checked fetch/decoder diagnostics are reused. Added C012_INVALID_SP, C013_INVALID_SHIFT, C014_INVALID_TARGET, and request-only C015_INVALID_BATCH_SIZE. Diagnostics preserve fetched word and faulting address, include invalid target/count when relevant, and receive a source range from the loaded map when available. Returned diagnostics cannot mutate private state.
+
+Step/batches share the existing cumulative budget. Ordinary Step/batch completion pauses. HALT/fault/limit are terminal until reset or successful load; raising the limit or changing setup values cannot resume terminal execution. A successful final allowed instruction commits then reports limit-reached; HALT/fault take precedence on that attempt. Exhausted budgets stop before another fetch/attempt. Limits cannot be lowered below attempts already counted. Invalid batch bounds return a diagnostic without any CPU-state/count change. Batches require an integer bound 1–10,000,000 and execute synchronously; scheduling is deferred. Idle/empty CPUs perform no execution.
+
+## Exact execution fixtures
+
+All results below are asserted through assembler → loader → execution → snapshot tests, with status **halted** and SP **65,536**:
+
+| Program | A | B | PC | Attempts | Additional assertion |
+| --- | --- | --- | --- | --- | --- |
+| `ldc 10; adc 5; HALT` (separate lines) | 15 | 0 | 2 | 3 | Step and batch snapshots match |
+| Countdown from 3 (`brz` forward / `br` backward) | 0 | 0 | 4 | 12 | Terminates normally |
+| `adj -1; ldc 42; stl 0; ldl 0; adj 1; HALT` (separate lines) | 42 | 0 | 5 | 6 | memory[65,535] = 42 |
+| `ldc 7; call fn; HALT; fn: return` (separate lines) | 7 | 7 | 2 | 4 | Memory unchanged; no implicit stack |
+
+New coverage includes all 19 exact old/new register/memory effects; signed min/max overflow; shift counts 0/1/30/31 and invalid counts; SP/access boundaries; call/return and taken/untaken branches; HALT at 65,535; atomic final-word faults across all 18 non-HALT instructions; invalid fetched opcodes/payloads; target overflow; runtime validation order; pure preparation/invalid PC checks; branching into data and self-modifying code; bounded/invalid batches; idle/terminal behavior; shared Step/batch limits; HALT/fault precedence; pre-fetch exhaustion; reset/reload/replay after HALT, fault, limit, and self-modification; and result ownership. A default-budget infinite loop stops at exactly **100,000 attempts**, without another fetch or excess attempt. No executor mocks were used.
+
+No packages, runtimes, browser binaries, or test frameworks were downloaded/installed. The requested audit fetched registry advisory metadata only. Browser interaction and Node 24 validation remain pending. No fabricated output, frontend integration, scheduling/animations, debugger, breakpoints, execution traces, or test-case runner were added. Assemble/Run/Step/Pause/Reset remain disabled. No commits, pushes, deployments, GitHub/Vercel operations, or Day 8 work occurred.
+
+The Day 6 and earlier results below are historical.
+
+## Day 6 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using existing **Node 26.2.0 / npm 11.13.0**. The only available Node executable is the existing system installation; **Node 24.x remains the target and was not available for verification**. No runtime was installed or switched.
 

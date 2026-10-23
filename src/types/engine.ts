@@ -1,4 +1,4 @@
-// CPU runtime behavior is specified in docs/ISA_DESIGN.md; execution is not implemented.
+// CPU runtime behavior is specified in docs/ISA_DESIGN.md; no UI execution integration yet.
 export type RegisterName = "A" | "B" | "PC" | "SP";
 
 export interface SourceLocation {

@@ -1,6 +1,7 @@
 import type { CpuResult, DecodedInstruction } from "../../types/cpu.ts";
 import { INSTRUCTIONS, WORD_MIN } from "../assembler/isa.ts";
 import { cpuFailure } from "./diagnostics.ts";
+import { isValidPc } from "./validation.ts";
 
 const BY_OPCODE = new Map<number, (typeof INSTRUCTIONS)[number]>(INSTRUCTIONS.map((definition) => [definition.opcode, definition]));
 
@@ -17,4 +18,12 @@ export function decodeInstruction(word: number): CpuResult<DecodedInstruction> {
     return cpuFailure("C003_INVALID_ENCODING", `${definition.mnemonic} requires zero operand bits.`, { word });
   }
   return { ok: true, value: { word, opcode: definition.opcode, mnemonic: definition.mnemonic, operand } };
+}
+
+/** Shared checked fetch for inspection and execution; never mutates memory. */
+export function fetchDecodedInstruction(memory: Int32Array, address: number): CpuResult<DecodedInstruction> {
+  if (!isValidPc(address)) return cpuFailure("C004_INVALID_PC", "Fetch address must be an integer from 0 to 65535.", { address });
+  const result = decodeInstruction(memory[address]);
+  if (!result.ok) return { ok: false, diagnostic: { ...result.diagnostic, address } };
+  return result;
 }

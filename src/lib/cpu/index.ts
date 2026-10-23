@@ -1,9 +1,10 @@
-import type { CpuFoundationSnapshot, CpuResult, DecodedInstruction, RuntimeDiagnostic } from "../../types/cpu.ts";
+import type { CpuExecutionResult, CpuFoundationSnapshot, CpuResult, DecodedInstruction, RuntimeDiagnostic } from "../../types/cpu.ts";
 import type { CpuState, ExecutionLimits, ExecutionStatus, MachineCode, RegisterName, TraceEntry } from "../../types/engine.ts";
 import { DEFAULT_EXECUTION_LIMIT, MAX_EXECUTION_LIMIT, MEMORY_WORDS } from "../assembler/isa.ts";
-import { decodeInstruction } from "./decoder.ts";
+import { fetchDecodedInstruction } from "./decoder.ts";
 import { cpuFailure } from "./diagnostics.ts";
-import { isMemoryAddress, isSignedWord, isValidExecutionLimit, isValidImageSize, isValidPc, isValidRegisterValue } from "./validation.ts";
+import { prepareInstruction } from "./execution.ts";
+import { isMemoryAddress, isSignedWord, isValidExecutionLimit, isValidImageSize, isValidRegisterValue } from "./validation.ts";
 
 export { decodeInstruction } from "./decoder.ts";
 export { isMemoryAddress, isSignedWord, isValidExecutionLimit, isValidImageSize, isValidPc, isValidRegisterValue, isValidSp } from "./validation.ts";
@@ -103,6 +104,7 @@ export function writeRegister(cpu: Cpu, register: RegisterName, value: number): 
 export function setExecutionLimit(cpu: Cpu, maxInstructions: number): CpuResult<void> {
   const state = stateFor(cpu);
   if (!isValidExecutionLimit(maxInstructions)) return cpuFailure("C010_INVALID_EXECUTION_LIMIT", `Execution limit must be an integer from 1 to ${MAX_EXECUTION_LIMIT}.`);
+  if (maxInstructions < state.attemptedInstructions) return cpuFailure("C010_INVALID_EXECUTION_LIMIT", "Execution limit cannot be lower than the number of attempts already counted.");
   state.limits.maxInstructions = maxInstructions;
   return { ok: true, value: undefined };
 }
@@ -110,8 +112,53 @@ export function setExecutionLimit(cpu: Cpu, maxInstructions: number): CpuResult<
 /** Optional address is a word-addressed inspection override; PC never advances. */
 export function fetchInstruction(cpu: Cpu, address = stateFor(cpu).registers.PC): CpuResult<DecodedInstruction> {
   const state = stateFor(cpu);
-  if (!isValidPc(address)) return cpuFailure("C004_INVALID_PC", `Fetch address must be an integer from 0 to ${MEMORY_WORDS - 1}.`, { address });
-  const result = decodeInstruction(state.memory[address]);
-  if (!result.ok) return { ok: false, diagnostic: { ...result.diagnostic, address } };
-  return result;
+  return fetchDecodedInstruction(state.memory, address);
+}
+
+function attemptInstruction(state: InternalCpu): void {
+  if (state.attemptedInstructions >= state.limits.maxInstructions) {
+    state.status = "limit-reached";
+    return;
+  }
+  state.attemptedInstructions++;
+  const prepared = prepareInstruction(state);
+  if (!prepared.ok) {
+    const diagnostic = prepared.diagnostic;
+    const source = state.program?.sourceMap.find(({ offset, length }) => offset === state.registers.PC * 4 && length === 4)?.source;
+    state.diagnostics.push(source ? { ...diagnostic, source } : diagnostic);
+    state.status = "error";
+    return;
+  }
+  const { registers, write, halted } = prepared.value;
+  if (write) state.memory[write.address] = write.value;
+  state.registers = registers;
+  if (halted) state.status = "halted";
+  else if (state.attemptedInstructions === state.limits.maxInstructions) state.status = "limit-reached";
+}
+
+function executeSteps(state: InternalCpu, maxSteps: number): CpuExecutionResult {
+  const before = state.attemptedInstructions;
+  if (state.status === "ready" || state.status === "paused") {
+    state.status = "running";
+    for (let step = 0; step < maxSteps && state.status === "running"; step++) attemptInstruction(state);
+    if (state.status === "running") state.status = "paused";
+  }
+  return {
+    status: state.status, attempts: state.attemptedInstructions - before,
+    attemptedInstructions: state.attemptedInstructions, diagnostics: structuredClone(state.diagnostics),
+  };
+}
+
+export function stepCpu(cpu: Cpu): CpuExecutionResult {
+  return executeSteps(stateFor(cpu), 1);
+}
+
+/** Synchronous caller-bounded work only; scheduling and UI integration are external. */
+export function runCpuBatch(cpu: Cpu, maxSteps: number): CpuExecutionResult {
+  const state = stateFor(cpu);
+  if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > MAX_EXECUTION_LIMIT) {
+    const { diagnostic } = cpuFailure("C015_INVALID_BATCH_SIZE", `Batch size must be an integer from 1 to ${MAX_EXECUTION_LIMIT}.`);
+    return { status: state.status, attempts: 0, attemptedInstructions: state.attemptedInstructions, diagnostics: [...structuredClone(state.diagnostics), diagnostic] };
+  }
+  return executeSteps(state, maxSteps);
 }

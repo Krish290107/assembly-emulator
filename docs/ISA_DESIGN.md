@@ -1,6 +1,6 @@
 # Assembly Emulator ISA v1
 
-**ISA finalized for Day 3; assembler completed on Day 5; CPU foundation added on Day 6.** This is the normative language/CPU profile for this project. Assembly, program loading, reset, memory access, and instruction decoding are implemented as internal TypeScript APIs. Instruction execution, debugging, and test execution are not implemented. Instruction effects below specify future CPU behavior, not current execution results.
+**ISA finalized for Day 3; assembler completed on Day 5; CPU execution implemented on Day 7.** This is the normative language/CPU profile for this project. Assembly, loading/reset, decoding, and all 19 instruction effects are implemented as internal TypeScript APIs. Frontend execution integration, debugging, trace recording, and test-case execution are not implemented.
 
 ## Machine state and addresses
 
@@ -16,7 +16,7 @@ Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted i
 
 A successful image loads at word address 0, replacing memory after zero-fill. There is no origin directive; `MachineCode.origin` is 0 in ISA v1. Every instruction and data directive occupies one word; a label-only line occupies none. An image must fit in memory. A zero-word image is not runnable and remains idle; a nonempty loaded image is ready.
 
-Reset restores the initial registers, zero-fills memory, reloads the last successfully loaded image (if any), and clears the attempt counter, trace, program output, and runtime diagnostics. It returns to ready for a nonempty image, otherwise idle. The Day 6 API implements register/memory/image/counter reset and clears its diagnostic/trace collections; output generation and trace recording do not exist. Source, configured breakpoints, speed, and test definitions remain outside this API and are retained by their future owners. Loaded source mappings and the configured execution limit are preserved.
+Reset restores the initial registers, zero-fills memory, reloads the last successfully loaded image (if any), and clears the attempt counter, trace, program output, and runtime diagnostics. It returns to ready for a nonempty image, otherwise idle. The CPU API implements register/memory/image/counter reset and clears diagnostics and the reserved empty trace collection; output generation and trace recording do not exist. Source, configured breakpoints, speed, and test definitions remain outside this API and are retained by their future owners. Loaded source mappings and the configured execution limit are preserved.
 
 The stack grows downward by convention: `adj -n` reserves n words; `adj n` releases them. Memory-stack allocation/push/pop is never implicit: only adj/a2sp change SP, while all A/B effects still follow the instruction table. SP movement outside 0–65,536 faults; overlapping code/data or accessing an unallocated but in-range word does not. `call` does not use memory or SP. Nested calls must explicitly save return links in memory and later restore them to A before `return`.
 
@@ -46,7 +46,7 @@ Mnemonics are case-insensitive; the canonical spelling of opcode 18 is `HALT`. A
 | 17 / 11 | br v | 1 | PC ← N + v |
 | 18 / 12 | HALT | 0 | Normal termination: status halted; PC remains p; A, B, SP, and memory unchanged |
 
-`wrap32(x)` reduces an integer modulo 2^32, then interprets the result as signed two's complement. Arithmetic overflow wraps without fault or flags. Shift counts outside 0–31 fault; counts are not silently masked modulo 32. `shr` sign-extends negative B; there is no logical-right-shift opcode. The shift definitions are mathematical: a future implementation must preserve low 32 bits correctly rather than rely on imprecise JavaScript multiplication for large shifts.
+`wrap32(x)` reduces an integer modulo 2^32, then interprets the result as signed two's complement. Arithmetic overflow wraps without fault or flags. Shift counts outside 0–31 fault; counts are not silently masked modulo 32. `shr` sign-extends negative B; there is no logical-right-shift opcode. The implementation uses exact signed-word sums/differences followed by `| 0`, and validated `B << A` / `B >> A`, preserving low bits without imprecise large floating-point products.
 
 For example, a call at p saves p, not N. The corresponding return to A = p sets PC to p + 1. There is no extra automatic PC increment after the table's effect. A return target is checked after adding 1; it does not require proof that A came from a call. An untaken conditional branch checks only its fallthrough PC, not the unused target.
 
@@ -194,7 +194,7 @@ End columns above are exclusive. Source-map byte offsets are 0, 4, and 8. `br -1
 | `writeRegister(cpu, name, value)` | Checked A/B/PC/SP setup; does not execute an instruction |
 | `setExecutionLimit(cpu, maxInstructions)` | Validates/stores a future cumulative attempt limit; does not count or execute attempts |
 
-`CpuResult<T>` is `{ ok: true, value: T }` or `{ ok: false, diagnostic: RuntimeDiagnostic }`. Failed operations have no value. Invalid image/setup/fetch/decode operations return diagnostics without mutating the CPU or appending runtime state. Today only idle and ready transitions exist. Decoding HALT does not halt the CPU, and decoding errors do not set status error. The attempt count remains zero; diagnostic/trace collections are initialized and reset but no execution faults or traces are recorded yet. All other lifecycle statuses are reserved for future execution. Passing a forged/foreign CPU handle is a programming error and throws `TypeError`.
+`CpuResult<T>` is `{ ok: true, value: T }` or `{ ok: false, diagnostic: RuntimeDiagnostic }`. Failed operations have no value. These image/setup/fetch/decode operations return diagnostics without mutating the CPU on failure or appending runtime state. Inspection alone never executes HALT, changes status, or counts attempts. Execution operations below return a separate lightweight summary and record runtime faults. Trace recording remains unimplemented. Passing a forged/foreign CPU handle is a programming error and throws `TypeError`.
 
 ### Loading, ownership, and reset
 
@@ -206,29 +206,48 @@ Memory and saved binary/source metadata are private. Changing the assembler resu
 
 The pure decoder accepts integer numbers represented either as signed 32-bit values (-2,147,483,648 through 2,147,483,647) or unsigned 32-bit bit patterns (0 through 4,294,967,295). It preserves the exact input number in `word`, reads `opcode = word & 0xff`, and sign-extends `operand = word >> 8`. Metadata determines mnemonic and operand presence. Opcodes 19–255 and nonzero operand bits for operand-free instructions fail. Nonintegers/out-of-range numbers fail before bitwise conversion. CPU memory always stores the signed representation, so fetched `word` values are signed.
 
-Fetch validates an integer word address 0–65,535 and attaches that address to decode errors. The optional inspection address never changes PC. Fetch may inspect zero-filled memory beyond the image or in a cold/empty CPU; decoding those bits is not execution or a transition to ready. Instruction attempts, budget enforcement, taken-target checking, arithmetic/shift behavior, and atomic execution faults remain Day 7 work.
+Fetch validates an integer word address 0–65,535 and attaches that address to decode errors. The optional inspection address never changes PC. Fetch may inspect zero-filled memory beyond the image or in a cold/empty CPU; decoding those bits is not execution or a transition to ready. Execution reuses the same checked fetch/decoder internally after counting the attempt.
 
-Pure helpers `isSignedWord`, `isValidRegisterValue`, `isValidPc`, `isValidSp`, `isMemoryAddress`, `isValidImageSize`, and `isValidExecutionLimit` enforce integer/range rules without coercion, truncation, or wrapping. Setup writes require already-valid signed A/B/memory values; future instruction arithmetic will apply ISA wrapping separately. SP may be 65,536 while PC and memory addresses may not. The default limit is 100,000; custom limits are integers 1–10,000,000 and persist across loads/resets.
+Pure helpers `isSignedWord`, `isValidRegisterValue`, `isValidPc`, `isValidSp`, `isMemoryAddress`, `isValidImageSize`, and `isValidExecutionLimit` enforce integer/range rules without coercion, truncation, or wrapping. Setup writes require already-valid signed A/B/memory values; instruction arithmetic applies ISA wrapping separately. SP may be 65,536 while PC and memory addresses may not. The default limit is 100,000; custom limits are integers 1–10,000,000 and persist across loads/resets. `setExecutionLimit` additionally rejects a limit below the count already attempted. A configuration change never resets attempts or resumes a terminal CPU.
 
-Runtime diagnostic codes are C001_INVALID_WORD, C002_INVALID_OPCODE, C003_INVALID_ENCODING, C004_INVALID_PC, C005_INVALID_ADDRESS, C006_INVALID_REGISTER, C007_INVALID_MEMORY_VALUE, C008_INVALID_ORIGIN, C009_INVALID_IMAGE_SIZE, C010_INVALID_EXECUTION_LIMIT, and C011_INVALID_IMAGE_TYPE. They extend existing diagnostics with optional `address`/`word` fields. Fetch/decode errors preserve the offending word when applicable; no source/trace association or execution accounting is invented.
+Foundation diagnostic codes are C001_INVALID_WORD, C002_INVALID_OPCODE, C003_INVALID_ENCODING, C004_INVALID_PC, C005_INVALID_ADDRESS, C006_INVALID_REGISTER, C007_INVALID_MEMORY_VALUE, C008_INVALID_ORIGIN, C009_INVALID_IMAGE_SIZE, C010_INVALID_EXECUTION_LIMIT, and C011_INVALID_IMAGE_TYPE. They extend existing diagnostics with optional `address`/`word`/`target` fields. Fetch/decode errors preserve the offending word when applicable. During execution, `address` is the faulting instruction address; `target` records an invalid computed address/SP/PC or shift count. When available, the loaded source map supplies the instruction's source range. Returned diagnostics are detached copies.
 
-## HALT, faults, and execution limits (future execution)
+## Instruction execution API (Day 7)
 
-The CPU foundation exists, but no instruction execution is implemented today. Future instruction attempts follow this order:
+`stepCpu(cpu): CpuExecutionResult` and `runCpuBatch(cpu, maxSteps): CpuExecutionResult` are exported from `src/lib/cpu/index.ts`. Both use the same private attempt/commit path and the pure effect-preparation phase in `execution.ts`. They never expose live state or copy the full memory array per attempt. Preparation reads old state and stages only four candidate registers and an optional single-word store; writes happen only after all validation succeeds.
 
-1. Check the cumulative attempt budget before fetching. If exhausted, stop with status limit-reached without another attempt or state mutation.
+Results contain `{ status, attempts, attemptedInstructions, diagnostics }`: actual CPU status, attempts in this call, cumulative attempts, and detached runtime diagnostics. Ordinary completion pauses before the next instruction. Ready/paused CPUs enter running while synchronous work is performed, then return paused or terminal. Idle CPUs and terminal halted/error/limit-reached CPUs are unchanged by execution calls and return zero new attempts. Cold/empty memory is inspectable but cannot execute until a nonempty image is loaded.
+
+`maxSteps` must be an integer 1–10,000,000; batches stop at that bound or earlier on HALT/fault/CPU budget. Invalid bounds return C015_INVALID_BATCH_SIZE in the result without changing CPU state/count/diagnostic storage; result status remains the actual CPU status, so callers must inspect diagnostics too. There are no scheduling callbacks, asynchronous timers, animations, breakpoints, or traces. Browser scheduling remains Day 8 work.
+
+| Execution diagnostic | Meaning |
+| --- | --- |
+| C012_INVALID_SP | Candidate SP is outside 0–65,536 |
+| C013_INVALID_SHIFT | Shift count is not an integer 0–31 |
+| C014_INVALID_TARGET | Candidate next PC is outside 0–65,535, including fallthrough |
+| C015_INVALID_BATCH_SIZE | Invalid caller batch configuration; no instruction attempted |
+
+Existing C002/C003 decode faults and C004/C005 PC/access faults are reused. Runtime faults set error and append one source-associated diagnostic, preserving all instruction registers and memory. No trace entry is recorded. The only ways to clear attempts and restore execution eligibility are reset or successful load.
+
+### HALT, faults, and execution limits
+
+Instruction attempts follow this implemented order:
+
+1. Check the cumulative attempt budget before fetching. If exhausted, stop with status limit-reached without another fetch, attempt, or register/memory mutation.
 2. Increment the attempt count, validate PC, fetch/decode, then validate opcode and zero payload for operand-free instructions.
 3. Validate a shift count if relevant, then any memory address / candidate SP, then the candidate next PC (except HALT, which retains p).
-4. Commit all effects simultaneously, or fault atomically: status error, a structured diagnostic/trace entry, unchanged registers and memory, and PC still at the faulting instruction. The attempt count/status/diagnostic are bookkeeping, not rolled back. If a nonterminal commit uses the last permitted attempt, stop with limit-reached after that commit; HALT/fault take precedence if they occur on the final allowed attempt.
+4. Commit all effects simultaneously, or fault atomically: status error, a structured diagnostic, unchanged registers and memory, and PC still at the faulting instruction. The attempt count/status/diagnostic are bookkeeping, not rolled back. If a nonterminal commit uses the last permitted attempt, stop with limit-reached after that commit; HALT/fault take precedence if they occur on the final allowed attempt. A future tracing layer may record these events; none is implemented today.
 
 Invalid opcode 19–255, invalid operand-free encoding, invalid fetch/access/PC/SP, and invalid shift counts fault. Address computations never wrap to an apparently valid address. HALT is successful termination and counts as one attempt; faults, including failed fetches, also count. HALT at word 65,535 succeeds; a non-HALT fallthrough to 65,536 faults before any effects commit. There are no implicit traps for stack/code overlap, division, flags, or I/O because those mechanisms do not exist.
 
 Default budget: **100,000 attempts**; caller-configured budget: integer **1–10,000,000**, otherwise reject configuration before starting. Pause/resume and Step share the same cumulative budget; they cannot bypass the limit. Reset/new image starts a fresh count. A single successful Step pauses before the next instruction unless it halts, faults, or reaches the limit; Run continues until a stop condition. Terminal halted/error/limit-reached states require reset or a new image before restarting.
 
-Future tests start from reset + loaded image + validated optional initial-state overrides, then run under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP overrides/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate memory overrides/assertions or duplicate assertions on the same target are invalid test definitions. A test passes only after normal HALT and matching assertions; fault, limit, invalid setup, or no runnable image fails. Tests, trace recording, and assertion evaluation are not implemented.
+The tested program `ldc 10`, `adc 5`, `HALT` terminates with A=15, B=0, PC=2, SP=65,536, three attempts, status halted. A countdown from 3 uses 12 attempts; a descending-stack store/load preserves memory[65,535]=42 and restores SP. These are internal automated execution fixtures; the browser UI remains disconnected.
 
-## Day 7 boundary
+Future test-case runner definitions start from reset + loaded image + validated optional initial-state overrides, then run under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP overrides/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate memory overrides/assertions or duplicate assertions on the same target are invalid test definitions. A test passes only after normal HALT and matching assertions; fault, limit, invalid setup, or no runnable image fails. This test-case runner, trace recording, and its assertion evaluator are not implemented.
 
-`src/lib/assembler/isa.ts` holds unchanged instruction metadata and architectural constants. The scanner/parser, both assembler passes, and CPU foundation use React-independent contracts. The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not wired to live editor diagnostics or CPU panels.
+## Day 8 boundary
 
-Day 6 stops at initialization, checked memory/register setup, atomic program loading, deterministic reset, pure decoding, and read-only fetch. Instruction execution, attempt accounting, budget enforcement, debugger, trace recording, and test execution are future work. The assembler still produces no CPU state or execution result.
+`src/lib/assembler/isa.ts` holds unchanged instruction metadata and architectural constants. The scanner/parser, both assembler passes, and CPU execution use React-independent contracts. The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not wired to live editor diagnostics or CPU panels.
+
+Day 7 stops at internal instruction execution, structured atomic faults, cumulative attempt limits, and synchronous bounded batches. Frontend scheduling/integration, debugger, breakpoints, trace recording, and test-case execution remain future work. The assembler itself still produces no CPU state or execution result.
