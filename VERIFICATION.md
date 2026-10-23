@@ -1,3 +1,75 @@
+# Day 12 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` using existing **Node 26.12.1 / npm 11.20.0**, executable `C:\Program Files\nodejs\node.exe`. Node 24.x was unavailable on PATH and in the previously checked project/version-manager locations. **The Node 24.x deployment target remains unverified.** No runtime was installed or switched.
+
+## Actual checks
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; includes positive/negative testing contracts |
+| `npm test` | PASS; **467 tests, 0 failures**, all existing 373 unchanged plus 94 Day 12 tests; none skipped/cancelled |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript and static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Day 12 browser verification | NOT RUN; engine-only work, browser runner intentionally disabled |
+
+The user reports Day 11 browser verification passed. This is user-provided evidence, not a fresh browser run by this task; the older checklists below are historical. No packages, frameworks, browser binaries or runtimes were installed/downloaded. The requested audit fetched advisory metadata only. Dependencies, lockfile and configuration are unchanged.
+
+## Files and engine boundary
+
+Created:
+
+- `src/types/testing.ts`: serializable definitions, assertions, results and session contracts extending the existing `TestCase` model.
+- `src/lib/testing/validation.ts`, `assertions.ts`, `index.ts`: strict validation, exact comparison, isolated incremental/async execution and sequential suites.
+- `src/lib/testing/fixtures.ts`: 14 standalone predefined definitions with real source and expectations.
+- `tests/testing.test.mjs`, `tests/testing.typecheck.ts`: runtime integration and type-contract regressions.
+- `docs/TESTING.md`: schema, API, scheduling/cancellation, result policy, fixtures and limitations.
+
+Modified `README.md`, this record, the testing-policy paragraph in `docs/ISA_DESIGN.md`, and explanatory text in `src/components/panels/tool-panel.tsx`. Both Test Cases actions remain disabled, with no engine imports/handlers or new panel integration. Assembler/CPU code, ISA semantics, workspace controller, debugger, Monaco, document handling and all existing tests are unchanged. No generated worker was edited.
+
+`runTestCase(definition)` / `runTestSuite(definitions)` use each definition's own source, matching the existing contract. `createTestExecution` / `createTestSuiteExecution` expose bounded `advance`, detached `getProgress` and idempotent `cancel`. Every case assembles its own image, creates/loads a private CPU, applies validated initial inputs using checked APIs, and evaluates actual execution. Suites preserve declaration order and activate only one CPU at a time. Invalid members count as failed; duplicate IDs invalidate all conflicting members. A valid empty suite passes with zero cases; a malformed suite fails with diagnostics.
+
+Default completion is HALT. Explicit negative cases require error status plus exact runtime code, or explicit limit-reached status. Only declared A/B/PC/SP, memory and attempt values are compared, exactly. Duplicate assertion/input targets, invalid integer ranges, unknown fields, sparse/accessor data and invalid completion expectations are rejected before assembly. Assembly/setup/empty-image/cancellation failures cannot satisfy an expected fault. Results contain real expected/actual values, individual outcomes, failure reasons and original diagnostics/source spans. Expected faults can pass as negative tests while retaining the actual CPU error diagnostic.
+
+The CPU default **100,000-attempt** budget is retained, with validated overrides 1–10,000,000. Each advance executes at most **256 attempts**; async helpers yield a timer turn between unfinished batches/cases. AbortSignal cancellation also releases a pending custom scheduler wait; late resolution cannot resume execution. Finished results remain final. Final state copies all four registers and only asserted memory cells, with no full-memory snapshots per instruction or retained traces. Private CPU memory is released on completion/cancellation.
+
+## Real execution evidence
+
+All **14 predefined fixtures PASS** through both the new engine and an independent direct assembler/load/setup/run/final-snapshot path. Details and source definitions are in [TESTING.md](docs/TESTING.md) and `src/lib/testing/fixtures.ts`.
+
+| Program | Actual key result | Actual CPU status | Attempts | Test result |
+| --- | --- | --- | --- | --- |
+| Constant | A=42, PC=1 | halted | 2 | PASS |
+| Addition | A=15, B=10 | halted | 4 | PASS |
+| Subtraction | A=13 | halted | 4 | PASS |
+| Signed arithmetic | A=-3 | halted | 3 | PASS |
+| Signed overflow | A=-2147483648 | halted | 4 | PASS |
+| Memory store/load | A=-7, M[100]=-7 | halted | 7 | PASS |
+| Stack relative | SP=65536, M[65535]=42 | halted | 6 | PASS |
+| Conditional branch | A=7 | halted | 4 | PASS |
+| Countdown | A=0, PC=4 | halted | 12 | PASS |
+| Call/return | A=B=7, PC=2 | halted | 4 | PASS |
+| HALT | PC=0, SP=65536 | halted | 1 | PASS |
+| Invalid access | Explicit C005_INVALID_ADDRESS, PC=1 | error | 2 | PASS (expected fault) |
+| Infinite loop | Explicit budget of 16, PC=0 | limit-reached | 16 | PASS (expected limit) |
+| Initial memory | M[100]=1234, A=1234 | halted | 3 | PASS |
+| Intentional mismatch: `ldc 10 / adc 5 / HALT` | Expected A=20, actual A=15 | halted | 3 | FAIL, as required |
+
+The intentional failing result is asserted by a passing automated regression; it is not a failing test in the 467-test project suite.
+
+## Regression coverage and limitations
+
+The 94 new tests cover valid/invalid serializable definitions; all registers and signed/address boundaries; strict values and duplicate/conflicting assertions/inputs; exact multi-failure results; assembly diagnostics/spans with no execution; empty images; six real runtime fault paths with expected/unexpected/wrong-code outcomes; HALT/fault versus last-attempt limit precedence; default and custom infinite-loop budgets; bounded incremental work; real event-loop yielding; pre-start/partial/blocked-scheduler cancellation; rejected schedulers; independent initial-memory/code patches; detached definitions/results; sequential ordered suites, empty/malformed/sparse suites, duplicate IDs and failure isolation; repeated deterministic results; and every fixture independently checked through the CPU. Test scheduling may be simulated, but instruction semantics are never mocked.
+
+An integration regression runs the new suite while the existing workspace has an active scheduled Run-to-Cursor session and breakpoint. The debugger view, memory window, source, pending timer and attempt count remain unchanged; its original callback then stops normally at the cursor. This checks that testing does not mutate or cancel the live workspace.
+
+Validation, assembly, setup and final assertion evaluation remain synchronous; CPU execution is cooperatively scheduled, not worker-preempted. Large sources/assertion lists can still take time in those phases. Custom host schedulers must yield a real browser turn. Separate explicitly created sessions are independent and scheduled by their caller; a suite itself never executes cases concurrently. Final results include only asserted memory cells, not a whole-memory replay image. Definitions/results are JSON-ready, but browser creation, persistence, import/export and execution/results UI are **Day 13 work**.
+
+Optional Brave boundary checks: open Info/Test Cases and verify accurate engine-only text and both disabled actions; run the existing `ldc 10 / adc 5 / HALT` debugger flow (A=15, PC=2, three attempts); confirm trace, breakpoints, autosave and document controls remain available. These checks were not performed during Day 12. There is no browser testcase-runner workflow to verify yet.
+
+Day 12 is complete and provides the API/fixtures for Day 13; **Day 13 has not started**. No commits, pushes, deployments, GitHub/Vercel operations, backend features, time travel or watchpoints were added. Earlier records below remain historical.
+
 # Day 11 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` with existing **Node 26.12.1 / npm 11.20.0** (`C:\Program Files\nodejs\node.exe`). Node 24.x was not available on PATH, in project tools, or the checked version-manager locations. **Node 24.x remains the target and is unverified**; no runtime was downloaded or changed.

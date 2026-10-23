@@ -1,6 +1,6 @@
 # Assembly Emulator
 
-Days 1–11 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, Run to Cursor, debugger shortcuts, and bounded execution tracing with filters/navigation/JSON export. **Time travel, watchpoints, and the custom test-case runner are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 11 preserves its semantics.
+Days 1–12 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, Run to Cursor, debugger shortcuts, and bounded execution tracing with filters/navigation/JSON export. A React-independent test-case engine now executes real programs and evaluates assertions. **The browser Test Cases runner is not connected; time travel and watchpoints are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 12 preserves its semantics.
 
 ## Stack and setup
 
@@ -32,7 +32,7 @@ Monaco is bundled from ESM source, and its plain-text worker is copied from the 
 - Ctrl+S requests a source download; Ctrl+N uses guarded Create. F5 runs/resumes, F10 steps once, Shift+F5 resets; F9 toggles a breakpoint in Monaco or the fallback source editor. Shortcuts apply only while focus is in the ready IDE, outside dialogs and unrelated inputs (including Monaco find fields), and pause during upload. Held keys do not repeat debugger commands; disabled commands consume the IDE key without executing or refreshing the page. Browser shortcuts outside the IDE and modifier variants remain untouched.
 - Browser-local draft autosave after 400 ms, restoration after refresh, and saving on page hide. Storage failures show a notice. An unreadable/corrupt draft is not overwritten until you edit or accept a replacement. Downloads provide a portable backup.
 - Create/upload/example replacement asks for confirmation when nonempty source differs from the last download requested in this session. Restored nonempty drafts are protected too. Cancelling keeps current source; undo history is not a substitute for a backup.
-- Separate closeable documentation and Test Cases panels with section jump navigation. Native modal dialogs provide focus containment, Escape dismissal, and focus restoration. Six guide sections include all 19 opcode definitions, syntax, architecture, and planned register/memory assertions.
+- Separate closeable documentation and Test Cases panels with section jump navigation. Native modal dialogs provide focus containment, Escape dismissal, and focus restoration. Six guide sections include all 19 opcode definitions, syntax, architecture, and the internal test-definition rules.
 - Parser-valid ISA v1 examples: addition, a countdown with forward/backward labels, and a full-width data constant. Existing saved source is preserved; older MOV/HLT drafts are not migrated or deleted.
 - Real CPU registers/status/attempts, bounded memory and machine-code windows, source diagnostics, and high-level execution messages. No fabricated execution data or custom test pass/fail results.
 
@@ -47,7 +47,7 @@ Assemble, Run, Step, Pause, Reset, source breakpoints, and Slow/Normal/Fast spee
 
 The controller owns one private CPU session. Slow uses 1 attempt/200 ms, Normal 64/32 ms, and Fast 512/16 ms; these are maximum batches and timer delays, not guaranteed instruction rates. Speed remains available in narrow layouts. Every batch yields through a client timer, and pause/reset/reassembly/source changes/unmount invalidate old callbacks. Speed changes scheduling only; CPU semantics and its cumulative 100,000-attempt default budget are unchanged. Initial and Reset speed is Normal. The UI displays Running while scheduled execution is active; the CPU is paused between batches. Pausing before the first batch leaves the unexecuted CPU ready.
 
-Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with runner/actions planned for Days 12–13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction checks pending for this environment are listed in `VERIFICATION.md`.
+Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with browser integration planned for Day 13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction verification is recorded in `VERIFICATION.md`.
 
 ## Debugging
 
@@ -150,6 +150,27 @@ All 19 instruction effects follow the unchanged ISA table. Arithmetic wraps sign
 
 Step and batches share one budget across pause/resume. An ordinary instruction using the final attempt commits then stops with limit-reached; HALT/fault take precedence. Exhausted budgets are checked before another fetch. Reset/load are the only operations that reset attempts and restore execution eligibility. Raising a terminal CPU's limit or changing registers/memory does not resume it; limits cannot be lowered below attempts already counted. Engine batches are synchronous; the controller schedules bounded breakpoint-aware work between browser turns.
 
+## Day 12 test-case engine
+
+`runTestCase(definition)` and `runTestSuite(definitions)` in `src/lib/testing/index.ts` return promises containing structured PASS/FAIL results. Each JSON-compatible definition owns its `source`, unique `id`, `name`, register/memory `assertions`, and optional description, initial values, completion expectations and execution limit. [TESTING.md](docs/TESTING.md) documents the complete schema, incremental APIs, diagnostics and 14 verified fixtures.
+
+```ts
+import { runTestCase } from "./src/lib/testing/index.ts";
+
+const result = await runTestCase({
+  id: "addition", name: "Add five", source: "ldc 10\nadc 5\nHALT",
+  assertions: [{ target: "register", register: "A", expected: 15 }],
+  expectedAttempts: 3,
+});
+// Real execution: PASS, halted, A=15, PC=2, three attempts.
+```
+
+HALT is the default required completion. Explicit negative tests require `expectedStatus: "error"` plus the exact `expectedFaultCode`, or `expectedStatus: "limit-reached"`. Exact comparisons check only declared state/attempt expectations. Invalid definitions, assembly/setup failures, empty programs, cancellation and unexpected faults fail. Duplicate assertion targets and suite IDs are rejected. Results retain diagnostics and expected/actual values, including for multiple mismatches.
+
+Every case assembles into a fresh private CPU. Checked initial memory/register inputs are applied after loading; the debugger and original image remain untouched. Execution uses at most **256 attempts per advance**, with a default **100,000-attempt** cumulative budget and validated limits up to 10,000,000. Async APIs yield between batches/cases and accept an AbortSignal; incremental sessions expose `advance`, `getProgress` and `cancel`. Suites run sequentially in declaration order. Results copy all four registers and only asserted memory cells, without full-memory snapshots per step. Validation, assembly and setup remain synchronous.
+
+The fixtures cover constants, arithmetic/overflow, memory, stack addressing, branching, a countdown loop, call/return, HALT, an expected memory fault, an expected limit, and initial memory. The browser Test Cases actions remain disabled until Day 13 integration; no browser test results are fabricated.
+
 ## Architecture
 
 ```text
@@ -161,6 +182,7 @@ src/components/toolbar/   File actions and live execution controls
 src/lib/editor/           Document I/O, autosave hook, examples, language
 src/lib/assembler/        ISA metadata, scanner, parser, both passes, and public API
 src/lib/cpu/              Private CPU state, loading/reset, validation, decode, and execution
+src/lib/testing/          Definition validation, isolated execution, assertions, suites, and fixtures
 src/lib/workspace/        Execution controller, breakpoint mapping, trace ring, markers, React adapter
 src/types/                UI/source types and React-independent engine contracts
 scripts/                  Local Monaco asset preparation
@@ -171,10 +193,10 @@ UI state stays in React; the client controller connects a private CPU handle to 
 
 ## Verification and limitations
 
-`npm test` preserves all 341 Day 1–10 tests and adds scoped debugger-key, speed/reset-race, memory-boundary/changed-marker, trace-JSON, fault-context, and execution-equivalence coverage. Only scheduling and UI event delivery are simulated; assembler/CPU results are real. UI-handler/render tests use installed React and TypeScript, with no new framework or browser dependency. `npm run typecheck` also checks positive/negative engine contracts. Engine imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
+`npm test` preserves all 373 Day 1–11 tests and adds focused test-engine validation, assertion, fault/limit, cancellation, isolation, suite and fixture integration coverage. Only scheduling and UI event delivery are simulated; assembler/CPU results are real. UI-handler/render tests use installed React and TypeScript, with no new framework or browser dependency. `npm run typecheck` also checks positive/negative engine and testing contracts. Engine imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
 
 Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Assembly does not prove runtime validity: the CPU checks taken targets, memory accesses, SP changes, and decoded bits during execution. Runtime state is in memory and is not restored from browser draft storage.
 
-## Pausing after Day 11
+## Pausing after Day 12
 
-Day 11 stops with debugger shortcuts, bounded trace export, memory/fault context and tested execution reliability. The tests and focused Brave checklist provide the baseline for Days 12–13; Day 12 and the custom test-case runner have not started. Time travel and advanced watchpoints remain unavailable. No deployment or GitHub operations are part of this work.
+Day 12 stops with a reusable, isolated test-case engine and verified fixtures. The API is ready for Day 13 browser integration, which has not started. Test Cases execution buttons remain disabled. Time travel and advanced watchpoints remain unavailable. No deployment or GitHub operations are part of this work.

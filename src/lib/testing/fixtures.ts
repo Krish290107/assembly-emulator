@@ -1,0 +1,33 @@
+import type { TestDefinition } from "../../types/testing.ts";
+
+/** Plain fixture data; every expected result is verified by real-engine tests. */
+export const PREDEFINED_TEST_CASES = [
+  { id: "load-constant", name: "Load a constant", source: "ldc 42\nHALT", expectedAttempts: 2,
+    assertions: [{ target: "register", register: "A", expected: 42 }, { target: "register", register: "PC", expected: 1 }] },
+  { id: "addition", name: "Add two constants", source: "ldc 10\nldc 5\nadd\nHALT", expectedAttempts: 4,
+    assertions: [{ target: "register", register: "A", expected: 15 }, { target: "register", register: "B", expected: 10 }] },
+  { id: "subtraction", name: "Subtract using B minus A", source: "ldc 20\nldc 7\nsub\nHALT", expectedAttempts: 4,
+    assertions: [{ target: "register", register: "A", expected: 13 }] },
+  { id: "signed-arithmetic", name: "Signed arithmetic", source: "ldc -5\nadc 2\nHALT", expectedAttempts: 3,
+    assertions: [{ target: "register", register: "A", expected: -3 }] },
+  { id: "signed-overflow", name: "Signed 32-bit overflow", source: "ldc value\nldnl 0\nadc 1\nHALT\nvalue: data 2147483647", expectedAttempts: 4,
+    assertions: [{ target: "register", register: "A", expected: -2147483648 }] },
+  { id: "memory-store-load", name: "Nonlocal store and load", source: "ldc -7\nldc 100\nstnl 0\nldc 0\nldc 100\nldnl 0\nHALT", expectedAttempts: 7,
+    assertions: [{ target: "register", register: "A", expected: -7 }, { target: "memory", address: 100, expected: -7 }] },
+  { id: "stack-relative", name: "Stack-relative store and load", source: "adj -1\nldc 42\nstl 0\nldl 0\nadj 1\nHALT", expectedAttempts: 6,
+    assertions: [{ target: "register", register: "A", expected: 42 }, { target: "register", register: "SP", expected: 65536 }, { target: "memory", address: 65535, expected: 42 }] },
+  { id: "conditional-branch", name: "Taken zero branch", source: "ldc 0\nbrz taken\nldc 99\ntaken: ldc 7\nHALT", expectedAttempts: 4,
+    assertions: [{ target: "register", register: "A", expected: 7 }, { target: "register", register: "PC", expected: 4 }] },
+  { id: "countdown-loop", name: "Countdown from three", source: "ldc 3\nloop: brz done\nadc -1\nbr loop\ndone: HALT", expectedAttempts: 12,
+    assertions: [{ target: "register", register: "A", expected: 0 }, { target: "register", register: "PC", expected: 4 }] },
+  { id: "call-return", name: "Call and return link", source: "ldc 7\ncall fn\nHALT\nfn: return", expectedAttempts: 4,
+    assertions: [{ target: "register", register: "A", expected: 7 }, { target: "register", register: "B", expected: 7 }, { target: "register", register: "PC", expected: 2 }] },
+  { id: "halt", name: "HALT preserves initial registers", source: "HALT", expectedAttempts: 1,
+    assertions: [{ target: "register", register: "A", expected: 0 }, { target: "register", register: "B", expected: 0 }, { target: "register", register: "PC", expected: 0 }, { target: "register", register: "SP", expected: 65536 }] },
+  { id: "invalid-memory", name: "Expected invalid memory fault", source: "ldc 65536\nldnl 0\nHALT", expectedStatus: "error", expectedFaultCode: "C005_INVALID_ADDRESS", expectedAttempts: 2,
+    assertions: [{ target: "register", register: "A", expected: 65536 }, { target: "register", register: "PC", expected: 1 }] },
+  { id: "instruction-limit", name: "Expected infinite-loop limit", source: "br -1", limits: { maxInstructions: 16 }, expectedStatus: "limit-reached", expectedAttempts: 16,
+    assertions: [{ target: "register", register: "PC", expected: 0 }] },
+  { id: "initial-memory", name: "Read a custom memory input", source: "ldc 100\nldnl 0\nHALT", initialState: { memory: [{ address: 100, value: 1234 }] }, expectedAttempts: 3,
+    assertions: [{ target: "register", register: "A", expected: 1234 }, { target: "memory", address: 100, expected: 1234 }] },
+] as const satisfies readonly TestDefinition[];
