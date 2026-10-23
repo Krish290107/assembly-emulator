@@ -1,4 +1,4 @@
-// Runtime behavior is specified in docs/ISA_DESIGN.md; no engine is implemented.
+// CPU runtime behavior is specified in docs/ISA_DESIGN.md; execution is not implemented.
 export type RegisterName = "A" | "B" | "PC" | "SP";
 
 export interface SourceLocation {
@@ -43,6 +43,7 @@ export interface SymbolDefinition {
 export interface MachineCode {
   bytes: Uint8Array;
   origin: number;
+  // Offsets and lengths count bytes; source ranges refer to full statements.
   sourceMap: readonly { offset: number; length: number; source: SourceRange }[];
 }
 

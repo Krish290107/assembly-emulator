@@ -1,6 +1,6 @@
 # Assembly Emulator ISA v1
 
-**Finalized for Day 3; first assembler pass added on Day 4.** This is the normative language/CPU profile for this project. The pure source parser and symbol/address collection exist; operand resolution, machine-code generation, loading, CPU execution, debugging, and test execution do not. Instructions below specify future behavior, not current execution results.
+**ISA finalized for Day 3; complete assembler implemented on Day 5.** This is the normative language/CPU profile for this project. The pure parser and two-pass assembler resolve symbols and generate machine-code images. Loading, CPU execution, debugging, and test execution are not implemented. Instruction effects below specify future CPU behavior, not current execution results.
 
 ## Machine state and addresses
 
@@ -12,7 +12,7 @@
 
 ### Initial state, loading, reset, and stack
 
-Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted instructions, and status idle, with no loaded program. The UI still shows absent state while no engine exists.
+Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted instructions, and status idle, with no loaded program. The UI still shows absent state while no CPU engine exists.
 
 A future successful image loads at word address 0, replacing memory after zero-fill. There is no origin directive; `MachineCode.origin` is 0 in ISA v1. Every instruction and data directive occupies one word; a label-only line occupies none. An image must fit in memory. A zero-word image is not runnable and remains idle; a nonempty loaded image is ready.
 
@@ -58,16 +58,16 @@ Each instruction is one 32-bit word:
 - Bits 7–0: unsigned opcode 0–18.
 - Bits 31–8: a **signed 24-bit** two's-complement operand, -8,388,608 through 8,388,607.
 - Instructions with no operand must encode all 24 operand bits as zero. Nonzero bits are an invalid instruction encoding, not ignored padding.
-- Mathematically, the bit pattern is `((v modulo 2^24) << 8) | opcode`. This specifies a layout only; no encoder is implemented.
+- Mathematically, the bit pattern is `((v modulo 2^24) << 8) | opcode`. The implemented encoder validates the operand before using `(v << 8) | opcode`; JavaScript's 32-bit shift preserves exactly these bits for every valid operand.
 - Files serialize each word as exactly four bytes in **little-endian** order: opcode/low byte first, then successively more significant bytes. The operand sign bit is bit 31 of the complete word. File lengths must be multiples of four; a future loader rejects malformed/oversized images before replacing existing state.
 
 The separate `data` directive contributes one full signed 32-bit word serialized in the same byte order. It has **no opcode** and is not an instruction alias. Memory contains no code/data tags: branching into data decodes its bit pattern as an instruction, which can either execute a valid encoding or fault. Falling beyond the loaded image is not automatically HALT; in-range zero-filled memory can be fetched.
 
-### Symbol meaning for Days 4–5
+### Symbol meaning
 
 A label denotes the word address of the next emitted instruction/data word. Mnemonics' operands accept either a literal or a symbol. For `call/brz/brlz/br`, a symbolic address t becomes displacement **t − (p + 1)**; a numeric literal already is the displacement. Other instruction symbols become absolute word addresses (including operands used as offsets); numeric literals keep their value. No implicit byte scaling occurs.
 
-Duplicate labels (same exact spelling), undefined symbols, symbols outside memory, image overflow, and resolved operands outside signed 24 bits will be assembler errors. A trailing label may point beyond the loaded image, provided its address is still within memory. The parser deliberately does not perform these semantic checks or allocate any addresses.
+Duplicate labels (same exact spelling), undefined symbols, symbols outside memory, image overflow, and resolved operands outside signed 24 bits are assembler errors. A trailing label may point beyond the emitted image, provided its address is still within memory. The parser deliberately does not perform these semantic checks or allocate any addresses.
 
 Numeric branch/call operands within signed 24 bits remain legal assembly even when their computed target would be outside memory; the future CPU faults only if that target is taken. Memory access and SP validity likewise remain runtime checks. A loader does not infer code/data regions or reject words merely because they would be invalid instructions when fetched.
 
@@ -92,7 +92,7 @@ signed-integer := ["+" | "-"] (decimal-digits | "0x" hex-digits)
 - No floats, exponent notation, digit separators, binary/octal prefixes, expressions, commas, bracketed memory operands, string literals, or multiple statements per line.
 - The 11 operand-taking instructions accept exactly one signed 24-bit literal or unresolved symbol. The other eight accept no operand. A literal such as positive `0xFFFFFF` is out of range, not implicitly -1; write `-1`.
 - `data` accepts exactly one signed **32-bit numeric literal**, no symbol. Positive `0xFFFFFFFF` is out of range; use `-1`. There are no SET, .data, .word, or origin directives.
-- Forward and backward symbol references are retained as names. Undefined/duplicate labels remain syntactically parseable. The first assembler pass rejects duplicates; undefined-symbol validation and operand resolution remain deferred.
+- Forward and backward symbol references are retained as names by the parser. Undefined/duplicate labels remain syntactically parseable. The first assembler pass rejects duplicates; the second pass rejects undefined symbols and resolves valid operands.
 
 Example (valid source, not an execution result):
 
@@ -120,7 +120,7 @@ Ranges use one-based line numbers and **UTF-16 code-unit columns**, matching Mon
 | P007_OPERAND_RANGE | Numeric value outside its signed 24/32-bit range |
 | P008_UNEXPECTED_TOKEN | More than one label on the same line |
 
-One blocking diagnostic is returned per malformed line, in source order. That entire line is omitted from statements (including any otherwise valid label on it); scanning/parsing resumes at the next line. Valid lines are retained even when `ok` is false. This is recovery output, not a partially assembled program. A later assembler must refuse code generation when parser errors exist.
+One blocking diagnostic is returned per malformed line, in source order. That entire line is omitted from statements (including any otherwise valid label on it); scanning/parsing resumes at the next line. Valid lines are retained even when `ok` is false. This is recovery output, not a partially assembled program. The assembler refuses code generation when parser errors exist.
 
 ## First assembler pass (Day 4)
 
@@ -133,7 +133,7 @@ One blocking diagnostic is returned per malformed line, in source order. That en
 - A trailing label names the next word even when no word follows, provided its address is at most 65,535. Exactly 65,536 emitting words fit; a label following them would name 65,536 and fails. SP's allowed empty-stack value 65,536 does not make that a valid label or memory address.
 - Overflow never wraps. Out-of-range labels are excluded from `symbols`; out-of-range statements and their references are excluded from located output. Each excess emitting word receives an overflow diagnostic. `wordCount` continues counting all syntactically valid emitting words, including excess words, to report the requested size accurately. First declarations are remembered even outside memory so later duplicates still identify the original location.
 - Every in-range instruction symbol operand remains an unresolved reference: `{ name, address, source, mode }`, where `address` is the referring instruction's word address and `source` is the operand range. `mode` is `relative` for call/brz/brlz/br and `absolute` for the other operand-taking instructions. Forward, backward, and currently undefined names are all retained without converting operands or checking target validity. Literal operands and data values are unchanged.
-- Parser diagnostics are copied first, in their original order and with their ranges intact. Pass diagnostics follow in source traversal order; on one line, duplicate, invalid label address, and emitting-word overflow appear in that order when applicable. `ok` is false if parser `ok` is false or any diagnostic is an error. Partial results on failure are for inspection only; a future encoder must reject them. Even a successful first pass does not establish that the program can assemble or run.
+- Parser diagnostics are copied first, in their original order and with their ranges intact. Pass diagnostics follow in source traversal order; on one line, duplicate, invalid label address, and emitting-word overflow appear in that order when applicable. `ok` is false if parser `ok` is false or any diagnostic is an error. Partial results on failure are for inspection only; the second pass rejects them. Even a successful first pass does not establish that the program can assemble or run.
 
 | Diagnostic | Meaning |
 | --- | --- |
@@ -142,6 +142,41 @@ One blocking diagnostic is returned per malformed line, in source order. That en
 | A003_PROGRAM_OVERFLOW | Instruction/data would occupy a word beyond 65,535 |
 
 For example, `first:`, `alias: ldc later`, `data 7`, `later: HALT` on four successive lines bind `first` and `alias` to 0, `later` to 2, and request three words. The `ldc` operand remains the symbol `later`; this pass does not replace it with 2 or serialize anything.
+
+## Second pass and public assembly API (Day 5)
+
+`assembleSource(source: string): AssemblyResult` is exported from `src/lib/assembler/index.ts`. Its pure, browser-independent pipeline is source → parser → first pass → `secondPass` → binary. `secondPass(first: FirstPassResult): AssemblyResult` in `second-pass.ts` can also be tested directly. Neither function changes its input or executes the image. No engine controls or live editor diagnostics are connected to this API yet.
+
+The second pass refuses a failed first pass or any existing error diagnostic, preserving earlier codes, ranges, and related locations. It then visits located statements in order. Label-only statements emit nothing. Each instruction symbol is looked up case-sensitively in the complete symbol table; absolute operands become the symbol's word address, and relative operands become `symbol.address - (instruction.address + 1)`. Immediate numbers stay unchanged, including branch displacements with possible out-of-memory runtime targets. All resolved instruction operands must be integers in the signed 24-bit range before any bitwise conversion. Undefined references each receive an error, including repeated uses of the same name; one undefined name does not prevent checking other independent references.
+
+Operand-free instructions encode a zero operand. The separate numeric `data` directive uses the entire signed 32-bit word. Valid in-memory symbols necessarily produce values within signed 24 bits under ISA v1, but the second pass still checks the resolved range. It also checks declared word count, consecutive word allocation, in-memory addresses, known mnemonics, operand presence, referenced symbol addresses, and data range to diagnose inconsistent typed pass input rather than silently truncate it. This is a compiler-stage contract check, not a general validator for arbitrary JavaScript objects.
+
+Only after all checks pass does serialization allocate a `Uint8Array`, write each signed 32-bit word through `DataView.setInt32(byteOffset, word, true)`, and expose the image. A successful result is `{ status: "success", program, symbols, diagnostics }`: `program.origin` is 0, `program.bytes.length` is `wordCount * 4`, and `symbols` is a fresh map of the collected definitions. Every emitted instruction/data word has one source-map entry `{ offset, length: 4, source }`; offsets count **bytes**, and source is the original full statement range, including any inline label but excluding indentation/comments. Label-only lines have no entry. Source ranges and symbol definitions retain their existing values; the AST and unresolved-reference list remain unchanged.
+
+A failure is `{ status: "failure", diagnostics }` with **no `program` or `symbols` properties**. Neither an earlier-stage error nor a second-pass error can expose a successful partial binary. Diagnostics retain phase order; second-pass errors follow in statement order, with any final word-count inconsistency last. Earlier warnings/info can survive a successful result. An empty/comment-only/label-only source may assemble to zero bytes and an empty source map; it is still not runnable. Data-only images may assemble without HALT or instruction validation; deciding what occurs when fetched belongs to the future CPU.
+
+| Diagnostic | Meaning |
+| --- | --- |
+| A004_INVALID_FIRST_PASS | Failed first-pass status without an existing error explaining it |
+| A005_UNDEFINED_SYMBOL | Missing case-sensitive name; range points to the symbol operand |
+| A006_OPERAND_RANGE | Resolved instruction operand is not a signed 24-bit integer; operand range retained |
+| A007_ENCODING_INCONSISTENCY | Inconsistent pass input/layout/operand shape; offending statement/value range when available |
+
+Exact assembly example (encoded bytes, not CPU execution):
+
+```asm
+ldc 10
+adc 5
+HALT
+```
+
+| Word address | Machine word (hex) | Little-endian bytes | Source range |
+| --- | --- | --- | --- |
+| 0 | 00000A00 | 00 0A 00 00 | line 1, columns 1–7 |
+| 1 | 00000501 | 01 05 00 00 | line 2, columns 1–6 |
+| 2 | 00000012 | 12 00 00 00 | line 3, columns 1–5 |
+
+End columns above are exclusive. Source-map byte offsets are 0, 4, and 8. `br -1` independently encodes as `FFFFFF11` / `11 FF FF FF`; `data -1` encodes as `FFFFFFFF` / `FF FF FF FF`.
 
 ## HALT, faults, and execution limits (future engine)
 
@@ -158,8 +193,8 @@ Default budget: **100,000 attempts**; caller-configured budget: integer **1–10
 
 Future tests start from reset + loaded image + validated optional initial-state overrides, then run under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP overrides/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate memory overrides/assertions or duplicate assertions on the same target are invalid test definitions. A test passes only after normal HALT and matching assertions; fault, limit, invalid setup, or no runnable image fails. Tests, trace recording, and assertion evaluation are not implemented.
 
-## Day 5 boundary
+## Day 6 boundary
 
-`src/lib/assembler/isa.ts` holds instruction metadata and architectural constants; scanner/parser, first pass, and `src/types/assembly.ts` provide the assembly foundation. `src/types/engine.ts` retains React-independent engine contracts with implicit operands and signed word memory; diagnostics may now include related source locations.
+`src/lib/assembler/isa.ts` holds unchanged instruction metadata and architectural constants. The scanner/parser, first and second passes, and public `assembleSource` API implement assembly under the existing React-independent contracts. The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not wired to live editor diagnostics.
 
-Day 5 can consume a successful first pass to check undefined symbols, resolve absolute/relative operands, validate the resulting operand ranges/targets, and encode/serialize words according to this document. **Day 4 stops at symbol/address collection: no second pass, machine-code generation, CPU, or debugger exists.** The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not yet wired to live editor diagnostics.
+Day 5 stops with a complete machine-code image and source mappings. CPU loading/execution, reset behavior, debugger, trace, and test execution are future work. No CPU state or execution result is produced by the assembler.

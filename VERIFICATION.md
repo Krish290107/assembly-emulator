@@ -1,4 +1,38 @@
-# Day 4 verification
+# Day 5 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using the existing **Node 26.2.0 / npm 11.13.0**. Node 24 is unavailable in the existing environment; the project target remains **24.x**, and verification on that target remains pending. No runtime was installed or switched.
+
+## Day 5 actual results
+
+| Command / check | Result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; existing positive/negative contract fixtures preserved |
+| `npm test` | PASS; **123 tests, 0 failures**, all 77 existing tests plus 46 assembler tests; no skipped tests |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript, static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Browser/UI interaction | NOT RUN this day; no UI, editor, examples, file handling, or controls changed |
+
+Created `src/lib/assembler/second-pass.ts`, the public API in `src/lib/assembler/index.ts`, and `tests/assembler.test.mjs`. Updated engine contract comments, README, ISA documentation, and this record. The parser/scanner, first pass, ISA metadata, all 77 existing tests, package manifests/lockfile, configuration, and UI are unchanged. Assemble/Run/Step/Pause/Reset remain disabled.
+
+The pure `assembleSource(source): AssemblyResult` pipeline now parses, collects addresses/symbols, resolves operands, and serializes complete images. `secondPass(first)` rejects failed earlier stages and preserves diagnostic codes/ranges/related locations. It resolves case-sensitive absolute word addresses and next-instruction-relative symbol operands; numeric displacements remain literal, even when their potential runtime targets are out of memory. Instruction operands are validated as signed 24-bit integers before shifting, data uses full signed 32-bit words, and operand-free instructions have zero payload. Independent undefined references are collected in source order. Failed results contain diagnostics only, with no program or symbols.
+
+Successful output is origin-zero `Uint8Array` data, a symbol map, diagnostics, and one source-map entry per emitted word. Source-map offsets/lengths count bytes and ranges cover complete statements; standalone labels emit nothing. Empty/label-only and data-only source assemble successfully without establishing that an image is runnable. Input structures and unresolved-reference records are not mutated. Defensive checks cover inconsistent pass flags, layouts/counts, instruction/operand shape, symbol addresses, and numeric values.
+
+The 46 new tests include fixed machine-word fixtures for all 19 opcodes; exact little-endian binary fixtures; positive/negative operands and both signed 24-bit/32-bit boundaries; absolute and relative forward/backward symbols; zero displacements and unchanged numeric branches/calls; case sensitivity; repeated and distinct undefined references with exact spans; duplicate/parser failure propagation; empty/data-only images; byte-based source maps with CRLF/inline labels; deterministic output/input immutability; and inconsistent-stage inputs that must fail without coercion or partial output. Existing source/first-pass tests also remain passing.
+
+The maximum-image fixture assembles exactly **65,536 words / 262,144 bytes**, checks the leading absolute address and forward branch bytes, checks the final backward branch bytes and final source mapping, and verifies the intervening zero data. One extra word and an out-of-memory trailing label both fail through the public pipeline. Resolved-symbol range rejection is additionally exercised with modified typed pass fixtures because valid in-memory symbols cannot exceed signed 24-bit limits under ISA v1.
+
+Exact tested assembly example: `ldc 10`, `adc 5`, `HALT` emit words `00000A00`, `00000501`, `00000012`, and bytes **`00 0A 00 00 01 05 00 00 12 00 00 00`**. These are actual encoded bytes checked by automated fixtures; no CPU execution or register result is claimed.
+
+No packages, runtime, browser binaries, or testing frameworks were downloaded/installed. The requested production audit fetched registry advisory metadata only. No server/browser execution checks were added for this internal library change. Node 24 and browser interaction validation remain pending; the production build and library tests do not establish browser behavior or CPU correctness.
+
+Day 5 stops at the complete assembler API. UI assembly integration, CPU loading/execution, debugger, trace, and test execution remain unimplemented. The binary and source maps are available for future Day 6 work, which was not started. No commits, pushes, deployments, or GitHub/Vercel operations occurred.
+
+The Day 4 and earlier results below are historical.
+
+## Day 4 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using the existing Node **26.2.0** and npm **11.13.0**. The project still targets **24.x**; Node 24 is unavailable here, so verification on that target remains pending. No runtime was installed or switched.
 
