@@ -24,6 +24,7 @@ export function IdeWorkspace() {
   const [uploading, setUploading] = useState(false);
   const [position, setPosition] = useState({ line: 1, column: 1 });
   const onPositionChange = useCallback((line: number, column: number) => setPosition({ line, column }), []);
+  const onRunToCursor = useCallback((line: number) => { controller.runToCursor(line); setOutputTab("trace"); }, [controller]);
 
   function replaceDocument(next: SourceDocument) {
     const accepted = source.replaceDocument(next);
@@ -51,8 +52,8 @@ export function IdeWorkspace() {
       {source.notice && <div className="notice-bar" role="status"><span>{source.notice}</span><button className="icon-button" aria-label="Dismiss notification" onClick={() => source.setNotice(null)}><X size={15} /></button></div>}
       <main id="workspace" className="workspace" tabIndex={-1}>
         <div className="code-workspace">
-          <ExecutionToolbar ready={source.ready && !uploading} view={view} onDebugger={() => setOutputTab("trace")} onSpeedChange={controller.setSpeed} onAction={(action) => { if (action === "assemble") controller.assemble(source.document.code); else controller[action](); }} />
-          <EditorPane filename={source.document.filename} revision={source.revision} code={source.document.code} ready={source.ready} modified={source.saveState === "saving"} onChange={(code) => { controller.setSource(code); source.updateCode(code); }} onPositionChange={onPositionChange} diagnostics={view.diagnostics} currentLine={view.currentSource?.start.line} breakpoints={view.breakpoints} onToggleBreakpoint={controller.toggleBreakpoint} navigation={view.navigation} />
+          <ExecutionToolbar ready={source.ready && !uploading} view={view} onDebugger={() => setOutputTab("trace")} onRunToCursor={() => onRunToCursor(position.line)} onSpeedChange={controller.setSpeed} onAction={(action) => { if (action === "assemble") controller.assemble(source.document.code); else controller[action](); }} />
+          <EditorPane filename={source.document.filename} revision={source.revision} code={source.document.code} ready={source.ready} modified={source.saveState === "saving"} onChange={(code) => { controller.setSource(code); source.updateCode(code); }} onPositionChange={onPositionChange} diagnostics={view.diagnostics} currentLine={view.currentSource?.start.line} breakpoints={view.breakpoints} onToggleBreakpoint={controller.toggleBreakpoint} onRunToCursor={onRunToCursor} navigation={view.navigation} />
           <OutputPanel view={view} onAddress={controller.setDisassemblyStart} active={outputTab} onTabChange={setOutputTab} debuggerActions={controller} />
         </div>
         <aside className="inspector" aria-label="CPU and memory inspectors"><div className="inspector-title"><Code2 size={14} /><span>MACHINE STATE</span><span className="inspector-draft">{view.status.toUpperCase()}</span></div><CpuPanel view={view} /><MemoryPanel view={view} onAddress={controller.setMemoryStart} /></aside>

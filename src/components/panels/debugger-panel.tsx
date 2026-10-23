@@ -2,17 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { hexWord, type WorkspaceController, type WorkspaceView } from "@/lib/workspace/controller";
-import { TRACE_CAPACITY } from "@/lib/workspace/debugger";
-import { TraceTable } from "./trace-table";
+import { filterTrace, TRACE_CAPACITY, TRACE_FILTERS, type TraceFilter } from "@/lib/workspace/debugger";
+import { TraceNavigation, TraceTable } from "./trace-table";
 
-export type DebuggerActions = Pick<WorkspaceController, "toggleBreakpoint" | "setBreakpointEnabled" | "removeBreakpoint" | "clearBreakpoints" | "clearTrace" | "selectTrace" | "navigateToTrace" | "navigateToBreakpoint">;
+export type DebuggerActions = Pick<WorkspaceController, "toggleBreakpoint" | "setBreakpointEnabled" | "removeBreakpoint" | "clearBreakpoints" | "clearTrace" | "selectTrace" | "navigateToTrace" | "navigateToBreakpoint" | "pause">;
 
 export function DebuggerPanel({ view, actions }: { view: WorkspaceView; actions: DebuggerActions }) {
   const [line, setLine] = useState("");
   const [notice, setNotice] = useState("");
+  const [filter, setFilter] = useState<TraceFilter>("all");
   const entry = view.selectedTrace;
   const details = useRef<HTMLElement>(null);
   const selectedStep = entry?.step;
+  const visibleTrace = filterTrace(view.trace, filter);
+  const selectionHidden = selectedStep !== undefined && !visibleTrace.some(({ step }) => step === selectedStep);
   useEffect(() => {
     // Details are below the table in the existing scrollable Output panel.
     // Reveal only on a new selection, never on execution-batch refreshes.
@@ -24,6 +27,9 @@ export function DebuggerPanel({ view, actions }: { view: WorkspaceView; actions:
     if (step === selectedStep) details.current?.scrollIntoView({ block: "start", inline: "nearest" });
   }
   return <div className="debugger-content">
+    {view.debuggerNotice && <p className="debugger-note" role="status">{view.debuggerNotice}</p>}
+    {view.cursorTarget && <p className="debugger-note" role="status">Run to Cursor target: line {view.cursorTarget.sourceLine}, word {view.cursorTarget.address}{view.cursorTarget.modified ? " (word modified)" : ""}. <button type="button" onClick={actions.pause}>Cancel target</button></p>}
+    {view.cursorPause && <p className="breakpoint-stop" role="status">Cursor reached: paused before line {view.cursorPause.sourceLine}, word {view.cursorPause.address}{view.cursorPause.modified ? " (word modified)" : ""}. No attempt consumed at the stop. Run continues; Step attempts one instruction.</p>}
     <div className="debugger-heading"><strong>Breakpoints</strong><button disabled={!view.breakpoints.length} onClick={actions.clearBreakpoints}>Clear breakpoints</button></div>
     <form className="breakpoint-form" onSubmit={(event) => {
       event.preventDefault();
@@ -39,7 +45,9 @@ export function DebuggerPanel({ view, actions }: { view: WorkspaceView; actions:
     {view.breakpointPause && <p className="breakpoint-stop" role="status">Paused before word {view.breakpointPause.address}, source line {view.breakpointPause.sourceLine}{view.breakpointPause.modified ? " (word modified)" : ""}. Run resumes past this breakpoint once; Step attempts one instruction.</p>}
     <div className="debugger-heading"><strong>Execution trace</strong><button disabled={!view.trace.length && !view.traceDiscarded} onClick={actions.clearTrace}>Clear trace</button></div>
     <p className="debugger-note">Last {TRACE_CAPACITY} attempted instructions · {view.trace.length} retained · {view.traceDiscarded} older entries discarded since clear. Inspection does not rewind the CPU.</p>
-    {view.trace.length ? <TraceTable entries={view.trace} selectedStep={selectedStep} onSelect={selectTrace} /> : <p className="debugger-note">No attempts recorded. Breakpoint stops do not create entries.</p>}
+    <div className="trace-controls"><label htmlFor="trace-filter">Show</label><select id="trace-filter" value={filter} onChange={(event) => setFilter(event.target.value as TraceFilter)}>{TRACE_FILTERS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><span>{visibleTrace.length} matching</span><TraceNavigation entries={visibleTrace} selectedStep={selectedStep} onSelect={selectTrace} /></div>
+    {selectionHidden && <p className="debugger-note" role="status">Selected step {selectedStep} is hidden by this filter; its details remain below.</p>}
+    {visibleTrace.length ? <TraceTable entries={visibleTrace} selectedStep={selectedStep} onSelect={selectTrace} /> : <p className="debugger-note">{view.trace.length ? "No attempts match this filter." : "No attempts recorded. Breakpoint stops do not create entries."}</p>}
     {entry ? <section ref={details} className="trace-detail" aria-label={`Trace step ${entry.step} details`}>
       <div className="debugger-heading"><strong>Step {entry.step} · word {entry.address}</strong><button disabled={!entry.source} onClick={() => actions.navigateToTrace(entry.step)}>Go to source</button></div>
       <p>{entry.word === undefined ? "No word fetched" : `Fetched ${hexWord(entry.word)} · ${entry.instruction}`}{entry.modified ? " · modified since assembly (*)" : ""}</p>

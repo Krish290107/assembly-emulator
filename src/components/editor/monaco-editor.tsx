@@ -38,12 +38,13 @@ export interface AssemblyEditorProps {
   currentLine?: number;
   breakpoints?: readonly SourceBreakpoint[];
   onToggleBreakpoint?: (line: number) => void;
+  onRunToCursor?: (line: number) => void;
   navigation?: SourceNavigation;
 }
 
 const NO_DIAGNOSTICS: readonly Diagnostic[] = [];
 const NO_BREAKPOINTS: readonly SourceBreakpoint[] = [];
-export default function AssemblyEditor({ code, onChange, onPositionChange, diagnostics = NO_DIAGNOSTICS, currentLine, breakpoints = NO_BREAKPOINTS, onToggleBreakpoint, navigation }: AssemblyEditorProps) {
+export default function AssemblyEditor({ code, onChange, onPositionChange, diagnostics = NO_DIAGNOSTICS, currentLine, breakpoints = NO_BREAKPOINTS, onToggleBreakpoint, onRunToCursor, navigation }: AssemblyEditorProps) {
   const [failed, setFailed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [instance, setInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -79,6 +80,15 @@ export default function AssemblyEditor({ code, onChange, onPositionChange, diagn
     const action = instance.addAction({ id: "assembly.toggleBreakpoint", label: "Toggle source breakpoint", keybindings: [monaco.KeyCode.F9], run: (editor) => { const position = editor.getPosition(); if (position) onToggleBreakpoint(position.lineNumber); } });
     return () => { mouse.dispose(); action.dispose(); };
   }, [instance, onToggleBreakpoint]);
+
+  useEffect(() => {
+    if (!instance || !onRunToCursor) return;
+    const action = instance.addAction({
+      id: "assembly.runToCursor", label: "Run to Cursor", contextMenuGroupId: "navigation", contextMenuOrder: 1.5,
+      run: (editor) => { const position = editor.getPosition(); if (position) onRunToCursor(position.lineNumber); },
+    });
+    return () => action.dispose();
+  }, [instance, onRunToCursor]);
 
   useEffect(() => {
     const model = instance?.getModel();

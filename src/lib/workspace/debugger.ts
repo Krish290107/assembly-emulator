@@ -11,6 +11,23 @@ export interface SourceBreakpoint extends Breakpoint {
 export interface SourceNavigation { line: number; column: number; request: number }
 export interface BreakpointPause { sourceLine: number; address: number; modified: boolean }
 export const TRACE_CAPACITY = 500;
+export const TRACE_FILTERS = [
+  { value: "all", label: "All attempts" },
+  { value: "writes", label: "Memory writes" },
+  { value: "control", label: "Branch / control flow" },
+  { value: "terminal", label: "Faults / terminal events" },
+] as const;
+export type TraceFilter = (typeof TRACE_FILTERS)[number]["value"];
+
+/** Presentation only: classify actual decoded instructions and committed results. */
+export function filterTrace(entries: readonly CpuAttemptTrace[], filter: TraceFilter): readonly CpuAttemptTrace[] {
+  switch (filter) {
+    case "writes": return entries.filter((entry) => entry.memoryWrite !== undefined);
+    case "control": return entries.filter((entry) => entry.decoded !== undefined && entry.decoded.opcode >= 13 && entry.decoded.opcode <= 18);
+    case "terminal": return entries.filter((entry) => ["error", "halted", "limit-reached"].includes(entry.status));
+    default: return entries;
+  }
+}
 
 const sameRange = (left: SourceRange, right: SourceRange) => left.start.line === right.start.line && left.start.column === right.start.column && left.end.line === right.end.line && left.end.column === right.end.column;
 

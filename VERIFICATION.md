@@ -1,3 +1,54 @@
+# Day 10 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` with existing **Node 26.12.1 / npm 11.20.0**. The executable on PATH is `C:\Program Files\nodejs\node.exe`; no Node 24 executable was found in the project tools or checked version-manager locations. **Node 24.x remains the deployment target and is unverified.** No runtime was downloaded or switched.
+
+## Day 10 actual results
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS |
+| `npm test` | PASS; **341 tests, 0 failures**: all original 302 unchanged plus 39 Day 10 tests; none skipped |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript and static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Browser automation | NOT RUN; fresh discovery returned no apps or browsers |
+
+The user reported that the Day 9 row-selection fix was manually verified. Day 10 pointer/keyboard/scrolling checks below remain pending; server-rendered component tests do not substitute for a browser. No packages, browser binaries, frameworks or runtimes were installed/downloaded. The requested audit fetched advisory metadata only; no dependency upgrades or audit fixes were performed.
+
+## Changes and behavior
+
+Created `tests/advanced-debugger.test.mjs`. Modified `src/lib/workspace/controller.ts`, `src/lib/workspace/debugger.ts`, `src/components/editor/monaco-editor.tsx`, `src/components/editor/editor-pane.tsx`, `src/components/editor/editor-fallback.tsx`, `src/components/layout/ide-workspace.tsx`, `src/components/toolbar/execution-toolbar.tsx`, `src/components/panels/debugger-panel.tsx`, `src/components/panels/trace-table.tsx`, `src/components/panels/tool-panel.tsx`, `src/app/globals.css`, `README.md`, and `VERIFICATION.md`. The CPU/ISA/assembler, React adapter, existing 302 tests, dependencies/lockfile and configuration are unchanged.
+
+Run to Cursor uses the existing validated instruction-line map, private CPU and bounded scheduler. Monaco provides a context-menu action using its current position; the compact main-toolbar action uses the tracked editor line and works with the fallback textarea. Both open Execution Trace for feedback. Current ready/paused assembly is required. Invalid/non-executable lines are rejected without CPU changes; inline labels and BOM/CRLF resolve correctly. Targets stop before execution with no consumed attempt or trace entry, immediately with no timer if already at PC. Modified words stay at their original assembled instruction address with a notice. Permanent breakpoint definitions/enabled flags are untouched.
+
+Earlier permanent breakpoints stop first and retain the pending goal; Run continues toward it, bypassing the current stopped address once. Later loop revisits still stop. At a shared target/breakpoint address the cursor stop wins once, and subsequent Resume bypasses that address once. Pause/Cancel target (including at an intervening breakpoint), Step, Reset, reassembly, source edits/replacements and disposal clear temporary targets. Speed changes preserve the target. Step then attempts exactly one instruction. HALT, atomic faults and limits retain normal CPU precedence and clear the goal. An unreachable target cannot renew the budget. A final permitted instruction that reaches the cursor address still reports limit-reached, without another attempt or replacement cursor stop. Stops reached at a batch boundary are recognized before scheduling another timer.
+
+The controller audit found that retained execution actions could start work after `dispose()`. Execution and scheduling now reject disposed controllers, notifications are suppressed, and disposal clears the cursor goal. A fresh subscription reactivates the controller for the existing Strict Mode lifecycle. Generation-token/session cancellation, one pending timer, checked memory reads, compact per-attempt records and once-per-batch publication remain intact. Busy-command notices are cleared when execution stops so an obsolete “Pause before choosing another cursor target” message cannot survive a completed stop. No CPU semantics or instruction attempt counting changed.
+
+Trace filtering is local presentation state: All attempts, Memory writes, Branch / control flow, Faults / terminal events. Writes require a committed delta, including unchanged-value stores; failed stores do not match. Control flow uses actual decoded opcodes 13–18 (call/return/brz/brlz/br/HALT), including untaken branches. Terminal matches error/halted/limit-reached results. The 500-entry ring and original cumulative IDs are unchanged. Previous/Next select nearest matching attempts; Next chooses the first match without a selection. Empty filters explain no matches. Filtering can hide a selected row while retaining its details with a notice; eviction removes the selection/details. Whole-row clicks, native Enter/Space Step buttons, single activation without bubbling duplicates, detail reveal, and reliable Go to source are preserved. Terminal/error text uses restrained colors; controls wrap on small panels. No search, time travel, watchpoints or custom test runner was added.
+
+## Regression evidence
+
+All 39 new tests use the real assembler and CPU; only scheduling and UI event delivery are simulated. Coverage includes initial/current/forward/backward/call-return targets, invalid lines, pending/current assembly, earlier/shared/loop breakpoints, Resume/Step/Pause interactions, every target-cancellation path, speed changes, rapid controls and stale callbacks, disposed actions/Strict Mode resubscription, modified targets, label alias deduplication, HALT/fault/limit precedence, committed/unchanged/failed stores, actual opcode filtering, hidden/evicted selections, and real TSX Previous/Next controls with native button accessibility. The six Day 9 selection regressions remain unchanged and pass.
+
+Six assembled programs (addition, countdown, stack memory, call/return, fault, self-modification) produce identical final CPU overviews, relevant low/high memory windows, and complete compact attempt histories with ordinary Run versus cursor/breakpoint/filter interactions. Existing full traced/untraced CPU snapshot consistency tests also pass. Default-budget loops stop at exactly **100,000 attempts** with **500 retained / 99,500 discarded**, including a program whose final allowed branch reaches the cursor PC but correctly remains limit-reached. No full memory snapshots were added to execution/UI paths.
+
+## Required manual browser checks
+
+1. Assemble `ldc 10 / adc 5 / HALT` on separate lines. Put the cursor on line 3 and use both Monaco's Run to Cursor context action and the main toolbar. Expect cursor-paused at PC=2, A=15, two attempts/two trace rows; Step or Run then executes HALT as attempt 3. Targeting initial line 1 must stop immediately with zero attempts. Check the same toolbar workflow with Monaco fallback.
+2. Try comments, blank/data/label-only lines and inline instructions; confirm accurate rejection or resolution and visible feedback. In the countdown example, set a loop breakpoint and target HALT. Resume through loop stops; the goal must remain pending until reached. Test a shared breakpoint/target address, disabled breakpoints, backward targets, Step cancellation and Pause/Cancel target while stopped at an earlier breakpoint.
+3. During cursor execution, change speed, Pause/Reset, edit/undo, Create/upload/choose another example, reassemble (including failures), and leave/unmount the workspace. Targets must not survive cancellation or act on old images. Test rapid Run/Pause/Step/Reset and terminal programs; no duplicate attempts or restart without reset/reassembly.
+4. Use a stack-store program and all four trace filters. Confirm committed store rows, untaken/taken branches, call/return/HALT classification, error/limit rows, retained original step IDs, empty-match messages, and Previous/Next behavior across gaps. Hidden selections keep details and a notice; filters never change live registers, memory or attempts.
+5. Recheck whole-row/Step button selection, highlighting, historical A=10 while live A=15, Enter/Space, detail reveal/reselection and source navigation. At Fast speed, let selected old entries expire from the 500-entry ring; their details must disappear. Check responsive/narrow panels, select/button labels, disabled navigation endpoints, scroll position during ongoing execution, and focus preservation.
+6. Recheck diagnostics/current-line versus breakpoint markers, worker loading, autosave/refresh, file guards/upload/download, undo/redo/find, Ctrl+S/Ctrl+N, Info/Test Cases and existing execution controls. Test Cases actions remain disabled. Browser runtime/debugger state remains session-local; draft storage still saves only source.
+
+## Day 10 boundary
+
+Day 10 implementation and automated checks are complete. Node 24 and Day 10 manual browser verification remain outstanding. This is the tested baseline for Day 11; **Day 11 has not started**. No GitHub operations, commits, pushes, deployments, time-travel execution, memory watchpoints or custom test-case execution were performed.
+
+The Day 9 and earlier records below are historical.
+
 # Day 9 verification
 
 ## Day 9 follow-up: trace selection fix

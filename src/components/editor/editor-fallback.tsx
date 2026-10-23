@@ -17,7 +17,7 @@ export function EditorFallback({ code, onChange, onPositionChange, navigation }:
   }, [navigationLine, navigationColumn, navigationRequest]);
   return (
     <div className="editor-fallback">
-      <p role="status">Monaco could not load. Keep editing here; manage breakpoints by line in the Execution Trace panel.</p>
+      <p role="status">Monaco could not load. Keep editing here; use Run to cursor in the toolbar and manage breakpoints by line in Execution Trace.</p>
       <textarea ref={textarea} aria-label="Assembly source" value={code} wrap="off" onChange={(event) => onChange(event.target.value)} onSelect={(event) => {
         const editor = event.currentTarget;
         const beforeCursor = editor.value.slice(0, editor.selectionStart);

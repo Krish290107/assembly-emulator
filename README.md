@@ -1,10 +1,10 @@
 # Assembly Emulator
 
-Days 1–9 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, and bounded execution tracing. **Time travel, watchpoints, and the custom test-case runner are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 9 preserves its semantics.
+Days 1–10 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, Run to Cursor, and bounded execution tracing with filters/navigation. **Time travel, watchpoints, and the custom test-case runner are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 10 preserves its semantics.
 
 ## Stack and setup
 
-Next.js App Router, React, TypeScript, Tailwind CSS, Monaco (`@monaco-editor/react`), Lucide, ESLint, and npm. Use Node.js **24.x** and npm 10+; the native test runner uses Node's built-in TypeScript stripping. The bounded Node engine selects Vercel's supported 24.x major and overrides a differing dashboard selection. No dashboard settings are changed by editing this repository. Local checks have run on the existing Node 26.2.0 / npm 11.13.0; Node 26 is outside the declared target, and Node 24 verification remains pending. Switch to Node 24 before a fresh dependency installation to avoid an engine mismatch warning.
+Next.js App Router, React, TypeScript, Tailwind CSS, Monaco (`@monaco-editor/react`), Lucide, ESLint, and npm. Use Node.js **24.x** and npm 10+; the native test runner uses Node's built-in TypeScript stripping. The bounded Node engine selects Vercel's supported 24.x major and overrides a differing dashboard selection. No dashboard settings are changed by editing this repository. Latest local checks use the existing Node 26.12.1 / npm 11.20.0; Node 26 is outside the declared target, and Node 24 verification remains pending. Switch to Node 24 before a fresh dependency installation to avoid an engine mismatch warning.
 
 ```powershell
 cd C:\Zekrui\assembly-emulator
@@ -49,7 +49,7 @@ The controller owns one private CPU session. Slow uses 1 attempt/200 ms, Normal 
 
 Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with runner/actions planned for Days 12–13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction checks pending for this environment are listed in `VERIFICATION.md`.
 
-## Day 9 debugging
+## Debugging
 
 - Click Monaco's glyph gutter or press **F9** to toggle a source breakpoint. Open **Execution Trace** or the small debugger toolbar button to enter a line number, enable/disable, remove, clear, or navigate to breakpoints. This keyboard-accessible list works with the fallback editor too. Enabled dots are red, disabled dots outlined, unresolved dots dim; the current instruction has a separate blue highlight.
 - Assembly resolves only exact CPU instruction lines to validated word addresses. Inline labels work; label-only, comment, blank, and `data` lines remain non-executable with an explanation. Definitions before assembly are pending. Addresses are deduplicated. **Reset preserves definitions and enabled flags**, while **source edits/replacements clear them**. Reassembling unchanged source re-resolves definitions. Breakpoints are session-local, not persisted with drafts.
@@ -57,6 +57,16 @@ Visualization uses a detached compact CPU overview plus checked reads for the vi
 - Each real attempt records its cumulative number, pre-execution PC, actual fetched word and decoded operand, compact before/after registers, any committed memory-write delta, result, and fault diagnostic. HALT and faulting attempts count; budget checks and breakpoint stops do not. No full memory snapshot is retained per attempt. `stepCpuTraced` extends the shared CPU attempt/commit path; the controller owns history separately from the legacy CPU snapshot's empty `trace` collection.
 - A fixed ring retains the **last 500 attempts**, drops the oldest, and displays the discarded count. Clear trace empties history without changing CPU state or cumulative attempts. Reset, reassembly and source edits clear history. Selecting a retained step shows register changes, stores, source and fault details; Go to source moves the editor cursor. **Inspection does not rewind or replay the CPU.**
 - Self-modified fetched bits are marked `*`, comparing with reset memory (including zero-filled cells beyond the image). Breakpoints stay bound to their original instruction word addresses and show a modification notice. Trace source links and current-line highlights require bits matching the assembled image; modified history has no source link. Source statements can include numeric/symbolic operands while trace instructions show the actual decoded numeric operand.
+
+### Day 10 Run to Cursor and trace navigation
+
+Place the editor cursor on an instruction line, then use **Run to cursor** in the main execution toolbar or Monaco's **Run to Cursor** context-menu action. The toolbar also works with the fallback editor and opens Execution Trace for target/status feedback. Assembly must be current and the CPU ready or paused. Invalid, comment, blank, label-only and `data` lines are rejected with an explanation; inline instructions resolve to their exact word address. A target at the current PC stops immediately without a timer or attempt.
+
+The temporary target never creates or changes permanent breakpoints. The existing scheduler stops **before** that instruction; the stop consumes no attempt and creates no trace entry. Earlier breakpoints stop first, leaving the goal pending; **Run** resumes toward it. **Pause** (also enabled at an intervening breakpoint), **Cancel target**, **Step**, Reset, reassembly, source replacement/edit and unmount cancel the pending goal. Speed changes retain it. Step then attempts exactly one instruction. HALT, faults and cumulative limits terminate normally and clear the goal; unreachable targets do not extend the budget. If the final permitted instruction reaches the target, its limit result takes precedence. A target sharing a permanent breakpoint stops once; Resume bypasses that address once and subsequent loop visits trigger the permanent breakpoint. Modified target words stay at their original assembled address and display a notice.
+
+Execution Trace offers **All attempts**, **Memory writes**, **Branch / control flow**, and **Faults / terminal events**. Writes means committed stores (including stores of an unchanged value). Control flow includes decoded call, return, brz, brlz, br and HALT, including untaken conditional branches. Terminal events include faults, HALT and limit-reached attempts. Classification uses the actual fetched instruction/result, not source text. Filters never change the 500-entry ring, CPU or cumulative attempt IDs.
+
+Click anywhere on a row, or activate its native Step button using Enter/Space, to highlight it and reveal historical details. **Previous/Next** select the nearest matching attempt before/after the selection; without a selection Next chooses the first match. An empty filter explains that nothing matches. If a filter hides the selected row, its details remain available with a notice. If retention evicts the selected attempt, its details disappear. Go to source remains available only for reliable mappings. Selection does not rewind execution, and execution refreshes do not repeatedly scroll the details.
 
 ## Day 3 parser
 
@@ -146,17 +156,17 @@ src/lib/cpu/              Private CPU state, loading/reset, validation, decode, 
 src/lib/workspace/        Execution controller, breakpoint mapping, trace ring, markers, React adapter
 src/types/                UI/source types and React-independent engine contracts
 scripts/                  Local Monaco asset preparation
-tests/                    Dependency-free Node tests for documents, engines, and workspace integration
+tests/                    Node tests for documents, engines, UI handlers, and workspace integration
 ```
 
 UI state stays in React; the client controller connects a private CPU handle to bounded display projections through an external-store hook. There is no state-management library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
 
 ## Verification and limitations
 
-`npm test` preserves all 262 Day 1–8 tests and adds debugger tests for exact breakpoint mapping, stop/resume/Step, loops, self-modification, trace fields/faults/limits/500-entry retention, history navigation, cancellation, and consistency across execution modes. Only scheduling is simulated; assembler/CPU results are real. `npm run typecheck` also checks positive/negative engine contracts. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
+`npm test` preserves all 302 Day 1–9 tests and adds Run to Cursor, complex breakpoint/cancellation/lifecycle interactions, terminal precedence, trace filtering/navigation/eviction, and execution-consistency coverage. Only scheduling and UI event delivery are simulated; assembler/CPU results are real. UI-handler/render tests use installed React and TypeScript, with no new framework or browser dependency. `npm run typecheck` also checks positive/negative engine contracts. Engine imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
 
 Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Assembly does not prove runtime validity: the CPU checks taken targets, memory accesses, SP changes, and decoded bits during execution. Runtime state is in memory and is not restored from browser draft storage.
 
-## Pausing after Day 9
+## Pausing after Day 10
 
-Day 9 stops with interactive source breakpoints and bounded, read-only trace inspection. The existing tests and documented browser checklist provide the baseline for Day 10; Day 10 has not started. Time travel, advanced watchpoints, and custom test-case execution remain unavailable. No deployment or GitHub operations are part of this work.
+Day 10 stops with Run to Cursor, trace filters/navigation, and tested debugger lifecycle/cancellation behavior. The tests and documented browser checklist provide the baseline for Day 11; Day 11 has not started. Time travel, advanced watchpoints, and custom test-case execution remain unavailable. No deployment or GitHub operations are part of this work.

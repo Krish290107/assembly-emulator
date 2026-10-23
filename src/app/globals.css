@@ -196,5 +196,10 @@ svg { flex-shrink: 0; }
 .breakpoint-stop { color: #ebc393; padding: 7px; border-left: 2px solid #e88b89; }
 .trace-table-wrap { max-height: 230px; overflow: auto; }
 .trace-table .trace-entry { cursor: pointer; }
+.trace-result-error { color: #e6a4a4; }
+.trace-result-terminal { color: #a5c4ab; }
+.trace-controls, .trace-navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.trace-controls { margin: 8px 0; font-size: 10px; }
+.trace-controls select { max-width: 100%; padding: 4px; border: 1px solid #344760; border-radius: 3px; }
 .trace-table thead { position: sticky; top: 0; }
 .trace-detail { border: 1px solid #2e4059; padding: 9px; margin-top: 9px; font: 11px Consolas, monospace; }
