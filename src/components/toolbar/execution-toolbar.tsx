@@ -7,6 +7,7 @@ export interface ExecutionToolbarProps {
   view: WorkspaceView;
   onAction: (action: ExecutionAction) => void;
   onSpeedChange: (speed: ExecutionSpeed) => void;
+  onDebugger: () => void;
 }
 
 const ACTIONS = [
@@ -17,7 +18,7 @@ const ACTIONS = [
   { id: "reset", label: "Reset", icon: RotateCcw },
 ] as const;
 
-export function ExecutionToolbar({ ready, view, onAction, onSpeedChange }: ExecutionToolbarProps) {
+export function ExecutionToolbar({ ready, view, onAction, onSpeedChange, onDebugger }: ExecutionToolbarProps) {
   const executable = !!view.cpu && ["ready", "paused"].includes(view.cpu.status) && !view.running;
   const enabled = { assemble: ready, run: ready && executable, step: ready && executable, pause: view.running, reset: ready && view.assembled };
   return (
@@ -26,7 +27,7 @@ export function ExecutionToolbar({ ready, view, onAction, onSpeedChange }: Execu
         {ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} disabled={!enabled[id]} onClick={() => onAction(id)} className={`execution-button ${id === "assemble" ? "assemble-button" : ""}`} title={enabled[id] ? label : id === "run" || id === "step" ? "Assemble valid source, or reset a terminal program, before execution" : `${label} unavailable in the current state`}><Icon size={14} /><span>{label}</span></button>)}
       </div>
       <div className="debug-controls">
-        <button disabled className="breakpoint-button" title="Breakpoints are planned for Days 9–11" aria-label="Breakpoints unavailable"><CircleDot size={14} /></button>
+        <button className="breakpoint-button" title="Breakpoints and execution trace" aria-label={`Open debugger; ${view.breakpoints.length} breakpoints configured`} onClick={onDebugger}><CircleDot size={14} /></button>
         <label className="speed-control">Speed <select value={view.speed} onChange={(event) => onSpeedChange(event.target.value as ExecutionSpeed)} aria-label="Execution speed"><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label>
         <span className="engine-badge">{view.status}</span>
       </div>

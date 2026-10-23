@@ -18,7 +18,7 @@ export function EditorPane(props: AssemblyEditorProps & { filename: string; revi
         <span className="editor-language">Assembly <span className="draft-tag">ISA v1</span></span>
       </div>
       <div className="editor-surface">
-        {props.ready ? <EditorBoundary key={props.revision} code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange}><AssemblyEditor code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange} diagnostics={props.diagnostics} currentLine={props.currentLine} /></EditorBoundary> : <div className="editor-loading" role="status">Restoring your workspace…</div>}
+        {props.ready ? <EditorBoundary key={props.revision} code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange} navigation={props.navigation}><AssemblyEditor code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange} diagnostics={props.diagnostics} currentLine={props.currentLine} breakpoints={props.breakpoints} onToggleBreakpoint={props.onToggleBreakpoint} navigation={props.navigation} /></EditorBoundary> : <div className="editor-loading" role="status">Restoring your workspace…</div>}
       </div>
       <div className="editor-footnote"><span>ISA v1</span><span>Assemble to validate. Editing clears the loaded image. Current instruction is highlighted when mapped.</span></div>
     </section>

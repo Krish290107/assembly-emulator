@@ -177,3 +177,24 @@ svg { flex-shrink: 0; }
 .current-instruction-line { background: #20344a55; }
 .current-instruction-gutter { border-left: 2px solid #8ab2e3; }
 @media (max-width: 760px) { .execution-toolbar { flex-wrap: wrap; } .engine-badge { display: none; } }
+
+.breakpoint-glyph { background: radial-gradient(circle, #e88b89 0 5px, transparent 6px) center / 16px 16px no-repeat; cursor: pointer; }
+.breakpoint-glyph.breakpoint-disabled { background-image: radial-gradient(circle, transparent 0 3px, #8797ac 4px 5px, transparent 6px); }
+.breakpoint-glyph.breakpoint-pending { opacity: .55; }
+.debugger-heading, .breakpoint-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 7px 0; }
+.debugger-heading { justify-content: space-between; }
+.debugger-heading strong { color: #c4d7f2; font-size: 11px; }
+.debugger-content button { border: 1px solid #344760; border-radius: 3px; padding: 3px 7px; font-size: 10px; }
+.debugger-content button:disabled { opacity: .45; }
+.debugger-content button:hover:not(:disabled) { background: #243650; }
+.breakpoint-form input { width: 70px; padding: 4px; color: #c5d5eb; background: #101722; border: 1px solid #344760; border-radius: 3px; }
+.debugger-note { color: #91a8c5; font-size: 10px; line-height: 1.6; margin: 6px 0; }
+.breakpoint-list { list-style: none; padding: 0; max-height: 155px; overflow: auto; }
+.breakpoint-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-bottom: 1px solid #27364a; padding: 5px 0; }
+.breakpoint-list label { display: inline-flex; align-items: center; gap: 6px; }
+.breakpoint-list span { width: 100%; color: #8da3bf; font-size: 10px; }
+.breakpoint-stop { color: #ebc393; padding: 7px; border-left: 2px solid #e88b89; }
+.trace-table-wrap { max-height: 230px; overflow: auto; }
+.trace-table .trace-entry { cursor: pointer; }
+.trace-table thead { position: sticky; top: 0; }
+.trace-detail { border: 1px solid #2e4059; padding: 9px; margin-top: 9px; font: 11px Consolas, monospace; }

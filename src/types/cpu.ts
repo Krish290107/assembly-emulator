@@ -46,3 +46,20 @@ export interface CpuExecutionResult {
 
 /** Detached compact state for visualization without copying memory/program bytes. */
 export type CpuOverview = Pick<CpuFoundationSnapshot, "registers" | "status" | "attemptedInstructions" | "limits" | "diagnostics">;
+
+/** Compact record of one counted attempt, including a faulting attempt. */
+export interface CpuAttemptTrace extends TraceEntry {
+  word?: number;
+  decoded?: DecodedInstruction;
+  before: CpuState["registers"];
+  after: CpuState["registers"];
+  memoryWrite?: { address: number; before: number; after: number };
+  status: ExecutionStatus;
+  diagnostic?: RuntimeDiagnostic;
+  modified: boolean;
+}
+
+export interface TracedStepResult {
+  execution: CpuExecutionResult;
+  entry?: CpuAttemptTrace;
+}

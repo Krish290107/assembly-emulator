@@ -1,7 +1,7 @@
-import type { CpuExecutionResult, CpuFoundationSnapshot, CpuOverview, CpuResult, DecodedInstruction, RuntimeDiagnostic } from "../../types/cpu.ts";
+import type { CpuAttemptTrace, CpuExecutionResult, CpuFoundationSnapshot, CpuOverview, CpuResult, DecodedInstruction, RuntimeDiagnostic, TracedStepResult } from "../../types/cpu.ts";
 import type { CpuState, ExecutionLimits, ExecutionStatus, MachineCode, RegisterName, TraceEntry } from "../../types/engine.ts";
-import { DEFAULT_EXECUTION_LIMIT, MAX_EXECUTION_LIMIT, MEMORY_WORDS } from "../assembler/isa.ts";
-import { fetchDecodedInstruction } from "./decoder.ts";
+import { DEFAULT_EXECUTION_LIMIT, getInstruction, MAX_EXECUTION_LIMIT, MEMORY_WORDS } from "../assembler/isa.ts";
+import { decodeInstruction, fetchDecodedInstruction } from "./decoder.ts";
 import { cpuFailure } from "./diagnostics.ts";
 import { prepareInstruction } from "./execution.ts";
 import { isMemoryAddress, isSignedWord, isValidExecutionLimit, isValidImageSize, isValidRegisterValue } from "./validation.ts";
@@ -120,32 +120,58 @@ export function fetchInstruction(cpu: Cpu, address = stateFor(cpu).registers.PC)
   return fetchDecodedInstruction(state.memory, address);
 }
 
-function attemptInstruction(state: InternalCpu): void {
+function attemptInstruction(state: InternalCpu, record?: (entry: CpuAttemptTrace) => void): void {
   if (state.attemptedInstructions >= state.limits.maxInstructions) {
     state.status = "limit-reached";
     return;
   }
   state.attemptedInstructions++;
+  const before = record ? { ...state.registers } : undefined;
+  const word = record && isMemoryAddress(state.registers.PC) ? state.memory[state.registers.PC] : undefined;
   const prepared = prepareInstruction(state);
   if (!prepared.ok) {
     const diagnostic = prepared.diagnostic;
     const source = state.program?.sourceMap.find(({ offset, length }) => offset === state.registers.PC * 4 && length === 4)?.source;
     state.diagnostics.push(source ? { ...diagnostic, source } : diagnostic);
     state.status = "error";
+    if (record) record(attemptTrace(state, before!, word));
     return;
   }
   const { registers, write, halted } = prepared.value;
+  const memoryWrite = record && write ? { address: write.address, before: state.memory[write.address], after: write.value } : undefined;
   if (write) state.memory[write.address] = write.value;
   state.registers = registers;
   if (halted) state.status = "halted";
   else if (state.attemptedInstructions === state.limits.maxInstructions) state.status = "limit-reached";
+  if (record) record({ ...attemptTrace(state, before!, word), memoryWrite });
 }
 
-function executeSteps(state: InternalCpu, maxSteps: number): CpuExecutionResult {
+function attemptTrace(state: InternalCpu, before: CpuState["registers"], word: number | undefined): CpuAttemptTrace {
+  const decoded = word === undefined ? undefined : decodeInstruction(word);
+  const address = before.PC;
+  const bytes = state.program?.bytes;
+  // Reset fills memory beyond the loaded image with zero words too.
+  const original = !isMemoryAddress(address) ? undefined : bytes && address * 4 + 4 <= bytes.length ? new DataView(bytes.buffer, bytes.byteOffset, bytes.length).getInt32(address * 4, true) : 0;
+  const modified = original !== undefined && original !== word;
+  const mapping = state.program?.sourceMap[address];
+  const source = word !== undefined && word === original && mapping?.offset === address * 4 && mapping.length === 4 ? structuredClone(mapping.source) : undefined;
+  const diagnostic = state.status === "error" ? structuredClone(state.diagnostics.at(-1)) : undefined;
+  // Keep legacy CPU diagnostics intact, but never attach a stale source link to history.
+  if (diagnostic) diagnostic.source = source;
+  return {
+    step: state.attemptedInstructions, address, word, decoded: decoded?.ok ? decoded.value : undefined,
+    instruction: decoded?.ok ? `${decoded.value.mnemonic}${getInstruction(decoded.value.mnemonic)!.operandMode === "none" ? "" : ` ${decoded.value.operand}`}` : "Invalid instruction bits",
+    before, after: { ...state.registers }, status: state.status === "running" ? "paused" : state.status,
+    diagnostic,
+    source, modified,
+  };
+}
+
+function executeSteps(state: InternalCpu, maxSteps: number, record?: (entry: CpuAttemptTrace) => void): CpuExecutionResult {
   const before = state.attemptedInstructions;
   if (state.status === "ready" || state.status === "paused") {
     state.status = "running";
-    for (let step = 0; step < maxSteps && state.status === "running"; step++) attemptInstruction(state);
+    for (let step = 0; step < maxSteps && state.status === "running"; step++) attemptInstruction(state, record);
     if (state.status === "running") state.status = "paused";
   }
   return {
@@ -156,6 +182,13 @@ function executeSteps(state: InternalCpu, maxSteps: number): CpuExecutionResult 
 
 export function stepCpu(cpu: Cpu): CpuExecutionResult {
   return executeSteps(stateFor(cpu), 1);
+}
+
+/** Same executor, with one detached compact attempt record; no trace on a no-op. */
+export function stepCpuTraced(cpu: Cpu): TracedStepResult {
+  let entry: CpuAttemptTrace | undefined;
+  const execution = executeSteps(stateFor(cpu), 1, (attempt) => { entry = attempt; });
+  return { execution, entry };
 }
 
 /** Synchronous caller-bounded work only; scheduling and UI integration are external. */

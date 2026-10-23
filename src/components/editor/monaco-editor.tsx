@@ -21,6 +21,7 @@ import { configureAssembly, LANGUAGE_ID } from "@/lib/editor/language";
 import { EditorFallback } from "./editor-fallback";
 import type { Diagnostic } from "@/types/engine";
 import { editorMarkers } from "@/lib/workspace/markers";
+import type { SourceBreakpoint, SourceNavigation } from "@/lib/workspace/debugger";
 
 // Bundle from source so npm's patched sanitizer is used, rather than the
 // sanitizer embedded in Monaco's prebuilt AMD distribution.
@@ -35,13 +36,20 @@ export interface AssemblyEditorProps {
   onPositionChange: (line: number, column: number) => void;
   diagnostics?: readonly Diagnostic[];
   currentLine?: number;
+  breakpoints?: readonly SourceBreakpoint[];
+  onToggleBreakpoint?: (line: number) => void;
+  navigation?: SourceNavigation;
 }
 
 const NO_DIAGNOSTICS: readonly Diagnostic[] = [];
-export default function AssemblyEditor({ code, onChange, onPositionChange, diagnostics = NO_DIAGNOSTICS, currentLine }: AssemblyEditorProps) {
+const NO_BREAKPOINTS: readonly SourceBreakpoint[] = [];
+export default function AssemblyEditor({ code, onChange, onPositionChange, diagnostics = NO_DIAGNOSTICS, currentLine, breakpoints = NO_BREAKPOINTS, onToggleBreakpoint, navigation }: AssemblyEditorProps) {
   const [failed, setFailed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [instance, setInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const navigationLine = navigation?.line;
+  const navigationColumn = navigation?.column;
+  const navigationRequest = navigation?.request;
 
   useEffect(() => {
     const model = instance?.getModel();
@@ -53,12 +61,39 @@ export default function AssemblyEditor({ code, onChange, onPositionChange, diagn
   }, [instance, diagnostics, currentLine]);
 
   useEffect(() => {
+    const model = instance?.getModel();
+    if (!instance || !model || model.isDisposed()) return;
+    const decorations = instance.createDecorationsCollection(breakpoints.filter(({ sourceLine }) => sourceLine <= model.getLineCount()).map((breakpoint) => ({
+      range: new monaco.Range(breakpoint.sourceLine, 1, breakpoint.sourceLine, 1),
+      options: { glyphMarginClassName: `breakpoint-glyph ${breakpoint.enabled ? "" : "breakpoint-disabled"} ${breakpoint.resolution === "resolved" ? "" : "breakpoint-pending"}`, glyphMarginHoverMessage: { value: `Breakpoint at line ${breakpoint.sourceLine}${breakpoint.enabled ? "" : " (disabled)"}. ${breakpoint.message}` } },
+    })));
+    return () => decorations.clear();
+  }, [instance, breakpoints]);
+
+  useEffect(() => {
+    if (!instance || !onToggleBreakpoint) return;
+    const mouse = instance.onMouseDown((event) => {
+      if (event.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN || !event.target.position) return;
+      event.event.preventDefault(); onToggleBreakpoint(event.target.position.lineNumber);
+    });
+    const action = instance.addAction({ id: "assembly.toggleBreakpoint", label: "Toggle source breakpoint", keybindings: [monaco.KeyCode.F9], run: (editor) => { const position = editor.getPosition(); if (position) onToggleBreakpoint(position.lineNumber); } });
+    return () => { mouse.dispose(); action.dispose(); };
+  }, [instance, onToggleBreakpoint]);
+
+  useEffect(() => {
+    const model = instance?.getModel();
+    if (!instance || !model || !navigationLine || !navigationColumn || navigationLine > model.getLineCount()) return;
+    instance.setPosition({ lineNumber: navigationLine, column: navigationColumn });
+    instance.revealLineInCenterIfOutsideViewport(navigationLine); instance.focus();
+  }, [instance, navigationLine, navigationColumn, navigationRequest]);
+
+  useEffect(() => {
     if (mounted) return;
     const timer = window.setTimeout(() => setFailed(true), 15000);
     return () => window.clearTimeout(timer);
   }, [mounted]);
 
-  if (failed) return <EditorFallback code={code} onChange={onChange} onPositionChange={onPositionChange} />;
+  if (failed) return <EditorFallback code={code} onChange={onChange} onPositionChange={onPositionChange} navigation={navigation} />;
 
   return (
     <Editor
@@ -93,7 +128,7 @@ export default function AssemblyEditor({ code, onChange, onPositionChange, diagn
         renderLineHighlight: "line",
         overviewRulerLanes: 0,
         hideCursorInOverviewRuler: true,
-        glyphMargin: false,
+        glyphMargin: true,
         folding: true,
         wordWrap: "off",
         scrollbar: { horizontalScrollbarSize: 10, verticalScrollbarSize: 10 },

@@ -1,3 +1,78 @@
+# Day 9 verification
+
+## Day 9 follow-up: trace selection fix
+
+Verified with existing **Node 26.12.1 / npm 11.20.0** on 23 October 2026. Node 24.x remains the deployment target and was unavailable; no runtime or packages were downloaded or switched by this fix.
+
+Investigation confirmed that the controller's numeric attempt IDs, selected-entry lookup, external-store publication, and historical details rendering already worked. Only the small Step button handled clicks; the rest of the row/cells were inactive. The details section also remained below the table inside the short, independently scrolling Output panel, with no reveal on selection. These UI omissions could make selection appear unresponsive. No blocking pointer overlay or CPU-state mutation was found in the selection path.
+
+Extracted the existing table into `src/components/panels/trace-table.tsx` and made its entire row select the attempt. Native Step buttons retain keyboard activation and pressed state, use explicit `type="button"`, and stop click propagation to avoid double selection. `debugger-panel.tsx` reveals selected details after rendering, including repeated selection of the same entry, without moving keyboard focus. The effect depends on the selected attempt number, so ordinary execution refreshes do not continually scroll. One cursor rule was added to `globals.css`. No controller, CPU, scheduler, ISA, or dependency changes were needed for this follow-up.
+
+Added `tests/trace-selection.test.mjs`: six regressions exercise the real TSX table handlers and server-rendered debugger panel with installed React/TypeScript and the real assembler/CPU. Coverage includes all four clickable cells, single publication per button activation, native keyboard-button semantics and detail-zero activation, selected-row/pressed-state rendering, historical A=10 followed by other entries, unchanged live A=15 / PC=2 / attempts=3, cumulative IDs after 500-entry rollover, and clearing selected details. The inactive-cell test failed before the handler fix; after the fix all six pass. Only click bubbling/browser activation delivery and scheduler timing are simulated; CPU execution is real.
+
+| Follow-up check | Actual result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS |
+| `npm test` | PASS; **302 tests, 0 failures**, all existing 296 unchanged plus 6 regressions; none skipped |
+| `npm run build` | PASS; Next.js compilation, TypeScript, static generation; no build warnings |
+| `git diff --check` | PASS |
+| Browser interaction | NOT RUN; fresh discovery returned no apps or browsers |
+
+Pending manual check: run `ldc 10 / adc 5 / HALT` on separate lines. In Execution Trace, click a row's PC/instruction/result or its Step button; confirm selected-row highlighting and revealed historical details (Step 1 A: 0 → 10). Select other steps and reselect the same step after scrolling away. Tab to Step buttons and activate with Enter/Space. Live registers must remain A=15, B=0, PC=2, SP=65,536 with three attempts and halted status. Check small/resized panels, focus preservation, and that continued execution does not repeatedly steal the scroll position. Real browser pointer hit-testing, scrolling and physical keyboard delivery are not covered by server-render tests.
+
+No downloads, commits, pushes, deployments, or Day 10 work were performed. The original Day 9 verification below is historical and records its earlier runtime and test count.
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using the existing **Node 26.2.0 / npm 11.13.0**. The project targets **Node 24.x**; only Node 26 is installed, so Node 24 verification remains pending. No dependencies, runtimes, browser binaries, or test frameworks were installed or downloaded. The requested audit fetched advisory metadata only.
+
+## Day 9 actual results
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; existing contract fixtures preserved |
+| `npm test` | PASS; **296 tests, 0 failures**: all 262 previous tests unchanged plus 34 debugger tests; none skipped |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript, static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Local production HTTP | Root, **8 client scripts**, **1 stylesheet**, and local Monaco worker return **200**; initial debugger/empty-history markup verified |
+| Browser automation | NOT RUN; fresh computer-use discovery returned **no apps or browsers** |
+
+The temporary production server bound only to `127.0.0.1:3100` and was stopped after verification; no listener remained. HTTP checks verify delivery and server markup, not hydration, visual layout, or live browser interactions.
+
+## Implemented debugger and consistency
+
+Created `src/lib/workspace/debugger.ts`, `src/components/panels/debugger-panel.tsx`, and `tests/debugger.test.mjs`.
+
+Modified files (13): `src/lib/cpu/index.ts`, `src/types/cpu.ts`, `src/lib/workspace/controller.ts`, `src/components/editor/monaco-editor.tsx`, `src/components/editor/editor-fallback.tsx`, `src/components/editor/editor-pane.tsx`, `src/components/layout/ide-workspace.tsx`, `src/components/toolbar/execution-toolbar.tsx`, `src/components/panels/output-panel.tsx`, `src/components/panels/tool-panel.tsx`, `src/app/globals.css`, `README.md`, and `VERIFICATION.md`.
+
+ISA, assembler/parser, CPU instruction preparation/commit semantics, loader/reset behavior, dependencies, lockfile, configuration, and all 262 previous tests remain unchanged.
+
+Breakpoints bind exact one-based instruction source lines through validated assembler mappings. Inline labels work; label-only/comment/blank/data lines explain their non-executable status without sliding forward. Pending definitions resolve on assembly; resolved addresses are deduplicated. Per-definition enable/remove, clear, source navigation, Monaco gutter toggling/F9, and an accessible line form are available. Reset retains definitions/enabled flags; unchanged-source reassembly resolves again; edits/replacements clear definitions, bindings and history. Breakpoints are session-local. Modified instruction words keep their original bound address and display a notice.
+
+Run checks PC before every attempt in the existing bounded scheduler. Breakpoint stops preserve registers, memory, status in the underlying CPU, and cumulative attempts; they create no trace. The view reports `breakpoint-paused`. Resume skips that address once, then later revisits stop again. Step attempts exactly one instruction through the same CPU executor. Existing cancellation tokens and one pending timer remain; subscribers receive one view per bounded batch, not one per instruction. Pausing before a resumed callback preserves the bypass until an actual attempt occurs.
+
+`stepCpuTraced` returns one detached compact entry from the shared attempt/commit path. Entries contain cumulative attempt, actual fetched PC/word, decoded mnemonic/operand where valid, before/after registers, committed memory-write old/new values, result, fault diagnostic, and source only while fetched bits match the image. Modified bits compare against reset memory, including zero-fill beyond the image. Faulting traces preserve unchanged instruction state; HALT and final permitted attempts are recorded. Budget prechecks, terminal/no-op calls, and breakpoint stops have no entry. Traced fault diagnostics omit stale source positions. The controller owns a fixed **500-entry ring**; CPU snapshots retain their legacy empty trace field. There are no per-instruction memory snapshots. Old entries are dropped with a displayed count; reset/reassembly/source edits clear history. Clear trace keeps CPU attempts/state. Selection and source navigation inspect detached records without restoring machine state.
+
+All 34 new tests use the real assembler/loader/CPU; only scheduling is simulated. Coverage includes breakpoint management, malformed maps, BOM/CRLF/non-executable lines, initial/multiple/loop stops, no consumed attempts, bypass/Step/disabled points, reset/reassembly/source invalidation, modified code including self-write and outside-image writes, fault/HALT/budget precedence, fetched bits/register snapshots/store deltas, 500-entry retention/eviction/clearing, a 100,000-attempt loop, detached history/source navigation/fallback offsets, rapid controls, stale callbacks, no duplicate timers, and bounded publication counts.
+
+Six assembled programs (addition, countdown, stack store/load, call/return, runtime fault, self-modification) produce matching final register/PC/SP/status/attempt counts and memory projections through uninterrupted Run, breakpoint/resume, and repeated Step, with identical attempt histories. Direct traced and untraced CPU execution also matches **full CPU snapshots**, including complete memory. The loop retains steps **99,501–100,000**, discards **99,500**, and stops at exactly 100,000 attempts without an extra budget attempt. No CPU execution semantics are mocked.
+
+## Pending manual browser checks
+
+1. Confirm clean hydration and local Monaco/worker loading, then assemble `ldc 10 / adc 5 / HALT` on separate lines. Toggle line 1 using gutter and F9; Run must stop at PC 0 with zero attempts and no trace. Resume must reach A=15, B=0, PC=2, SP=65,536, halted, three attempts. Reset must preserve the breakpoint and clear history.
+2. In the countdown example, break at the loop's instruction line. Resume repeatedly, Step while stopped, toggle enable, remove/clear, and try multiple points at Fast speed. Verify no skipped stops, immediate resume retrigger, duplicate timers, or attempts consumed by stops. Comments, label-only and data lines must show a non-executable explanation; inline instructions must resolve exactly.
+3. Inspect trace selection, register-change styling, actual fetched words, memory deltas, HALT/fault/limit results, source navigation, and modified-word notices. Use `adj -1 / ldc 42 / stl 0 / HALT` for a real store. With `br -1`, confirm 500 retained entries/discard counts and responsive Pause. Clear trace must preserve cumulative attempts and current machine state. Selecting history must not rewind anything.
+4. Edit, undo, Create/upload/choose an example, and reassemble while paused/running; confirm stale addresses/history are cleared and late callbacks cannot act. Reset restores modified memory and retains breakpoint enable flags; same-source reassembly re-resolves definitions. Test rapid Run/Pause/Reset and speed changes.
+5. Verify keyboard access to the debugger button, result tabs, breakpoint form/checkboxes/buttons, trace selection and Go to source. Force Monaco fallback without installing software; line-based breakpoint management and textarea source navigation must remain usable. Check distinct red dots/blue current line, narrow/desktop layouts, panel resize/scrolling, and focus behavior.
+6. Recheck existing diagnostics, autosave/refresh, upload/download, Ctrl+S/Ctrl+N, Monaco undo/redo/find/Tab focus mode, example/Create guards, and Info/Test Cases focus/Escape behavior. Custom test-runner actions remain disabled. Browser draft storage still contains only source, not CPU/debugger state.
+
+## Day 9 boundary
+
+Day 9 implementation and automated verification are complete, with **Node 24 and browser interaction checks pending**. This provides the tested baseline for Day 10; Day 10 has not started. No time-travel execution, advanced watchpoints, custom test-case runner, commits, pushes, deployments, or GitHub/Vercel operations were performed.
+
+The Day 8 and earlier records below are historical; their previous disabled-debugger descriptions do not describe the current UI.
+
 # Day 8 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` using existing **Node 26.2.0 / npm 11.13.0**. The project still targets **Node 24.x**; that runtime is unavailable here, so target-runtime verification remains pending. No runtime or packages were installed/switched.

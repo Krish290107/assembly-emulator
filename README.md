@@ -1,6 +1,6 @@
 # Assembly Emulator
 
-Days 1–8 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, and live CPU execution, registers, memory, and diagnostics. **Breakpoints, historical tracing, and the custom test-case runner are future work.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 8 preserves its semantics.
+Days 1–9 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, and bounded execution tracing. **Time travel, watchpoints, and the custom test-case runner are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 9 preserves its semantics.
 
 ## Stack and setup
 
@@ -36,9 +36,9 @@ Monaco is bundled from ESM source, and its plain-text worker is copied from the 
 - Parser-valid ISA v1 examples: addition, a countdown with forward/backward labels, and a full-width data constant. Existing saved source is preserved; older MOV/HLT drafts are not migrated or deleted.
 - Real CPU registers/status/attempts, bounded memory and machine-code windows, source diagnostics, and high-level execution messages. No fabricated execution data or custom test pass/fail results.
 
-Assemble, Run, Step, Pause, Reset, and Slow/Normal/Fast speed are connected to the real engines. Breakpoints and planned test actions remain disabled. Memory shows signed decimal and hexadecimal together. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
+Assemble, Run, Step, Pause, Reset, source breakpoints, and Slow/Normal/Fast speed are connected to the real engines. Planned test actions remain disabled. Memory shows signed decimal and hexadecimal together. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
 
-## Day 8 browser workflow
+## Browser workflow
 
 1. Write source or choose an example, then **Assemble**. Success reports total instruction/data words, bytes, symbols, and a loaded CPU with zero attempts. Failure clears the executable image and shows line/column diagnostics in Errors and Monaco.
 2. **Step** attempts one instruction. **Run** continues the current ready/paused image; **Pause** cancels pending work before another batch. HALT, faults, and exhausted budgets require **Reset** or reassembly to restart. The reference `ldc 10`, `adc 5`, `HALT` finishes with A=15, B=0, PC=2, SP=65,536, three attempts, halted.
@@ -47,7 +47,16 @@ Assemble, Run, Step, Pause, Reset, and Slow/Normal/Fast speed are connected to t
 
 The controller owns one private CPU session. Slow uses 1 attempt/200 ms, Normal 64/32 ms, and Fast 512/16 ms; these are maximum batches and timer delays, not guaranteed instruction rates. Every batch yields through a client timer, and pause/reset/reassembly/source changes/unmount invalidate old callbacks. Speed changes scheduling only; CPU semantics and its cumulative 100,000-attempt default budget are unchanged. The UI displays Running while scheduled execution is active; the CPU is paused between batches. Pausing before the first batch leaves the unexecuted CPU ready.
 
-Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages, not instruction history. The Trace panel explicitly reserves recording for Days 9–11; Test Cases remains a separate closeable panel with runner/actions planned for Days 12–13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction checks pending for this environment are listed in `VERIFICATION.md`.
+Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with runner/actions planned for Days 12–13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction checks pending for this environment are listed in `VERIFICATION.md`.
+
+## Day 9 debugging
+
+- Click Monaco's glyph gutter or press **F9** to toggle a source breakpoint. Open **Execution Trace** or the small debugger toolbar button to enter a line number, enable/disable, remove, clear, or navigate to breakpoints. This keyboard-accessible list works with the fallback editor too. Enabled dots are red, disabled dots outlined, unresolved dots dim; the current instruction has a separate blue highlight.
+- Assembly resolves only exact CPU instruction lines to validated word addresses. Inline labels work; label-only, comment, blank, and `data` lines remain non-executable with an explanation. Definitions before assembly are pending. Addresses are deduplicated. **Reset preserves definitions and enabled flags**, while **source edits/replacements clear them**. Reassembling unchanged source re-resolves definitions. Breakpoints are session-local, not persisted with drafts.
+- **Run** stops before an enabled breakpoint without changing CPU state, consuming an attempt, or adding a trace entry. Run again passes the stopped address once; a later loop revisit still stops. **Step** attempts exactly one instruction even at a breakpoint. The existing generation token and single timer cancel stale work. The controller checks PC before every attempt within each bounded batch and publishes the view once per batch.
+- Each real attempt records its cumulative number, pre-execution PC, actual fetched word and decoded operand, compact before/after registers, any committed memory-write delta, result, and fault diagnostic. HALT and faulting attempts count; budget checks and breakpoint stops do not. No full memory snapshot is retained per attempt. `stepCpuTraced` extends the shared CPU attempt/commit path; the controller owns history separately from the legacy CPU snapshot's empty `trace` collection.
+- A fixed ring retains the **last 500 attempts**, drops the oldest, and displays the discarded count. Clear trace empties history without changing CPU state or cumulative attempts. Reset, reassembly and source edits clear history. Selecting a retained step shows register changes, stores, source and fault details; Go to source moves the editor cursor. **Inspection does not rewind or replay the CPU.**
+- Self-modified fetched bits are marked `*`, comparing with reset memory (including zero-filled cells beyond the image). Breakpoints stay bound to their original instruction word addresses and show a modification notice. Trace source links and current-line highlights require bits matching the assembled image; modified history has no source link. Source statements can include numeric/symbolic operands while trace instructions show the actual decoded numeric operand.
 
 ## Day 3 parser
 
@@ -119,9 +128,9 @@ if (assembled.status === "success" && loadProgram(cpu, assembled.program).ok) {
 }
 ```
 
-All 19 instruction effects follow the unchanged ISA table. Arithmetic wraps signed 32-bit values; shifts validate counts 0–31 before bit operations. Addresses, SP, and next PC are checked as mathematical integers. Effects use old registers and commit together only after validation, including pending memory stores. A fault counts its attempt, records a structured diagnostic, and sets error while preserving registers/memory at the faulting PC. HALT preserves its PC and counts one attempt. Diagnostics include word/address/target and source range when available; no trace is recorded.
+All 19 instruction effects follow the unchanged ISA table. Arithmetic wraps signed 32-bit values; shifts validate counts 0–31 before bit operations. Addresses, SP, and next PC are checked as mathematical integers. Effects use old registers and commit together only after validation, including pending memory stores. A fault counts its attempt, records a structured diagnostic, and sets error while preserving registers/memory at the faulting PC. HALT preserves its PC and counts one attempt. Diagnostics include word/address/target and source range when available. The Day 9 traced API captures compact attempt records from this same execution path.
 
-Step and batches share one budget across pause/resume. An ordinary instruction using the final attempt commits then stops with limit-reached; HALT/fault take precedence. Exhausted budgets are checked before another fetch. Reset/load are the only operations that reset attempts and restore execution eligibility. Raising a terminal CPU's limit or changing registers/memory does not resume it; limits cannot be lowered below attempts already counted. Engine batches are synchronous; the Day 8 controller schedules them between browser turns. Breakpoints and tracing remain future work.
+Step and batches share one budget across pause/resume. An ordinary instruction using the final attempt commits then stops with limit-reached; HALT/fault take precedence. Exhausted budgets are checked before another fetch. Reset/load are the only operations that reset attempts and restore execution eligibility. Raising a terminal CPU's limit or changing registers/memory does not resume it; limits cannot be lowered below attempts already counted. Engine batches are synchronous; the controller schedules bounded breakpoint-aware work between browser turns.
 
 ## Architecture
 
@@ -134,7 +143,7 @@ src/components/toolbar/   File actions and live execution controls
 src/lib/editor/           Document I/O, autosave hook, examples, language
 src/lib/assembler/        ISA metadata, scanner, parser, both passes, and public API
 src/lib/cpu/              Private CPU state, loading/reset, validation, decode, and execution
-src/lib/workspace/        Testable execution controller, marker projection, and React adapter
+src/lib/workspace/        Execution controller, breakpoint mapping, trace ring, markers, React adapter
 src/types/                UI/source types and React-independent engine contracts
 scripts/                  Local Monaco asset preparation
 tests/                    Dependency-free Node tests for documents, engines, and workspace integration
@@ -144,10 +153,10 @@ UI state stays in React; the client controller connects a private CPU handle to 
 
 ## Verification and limitations
 
-`npm test` preserves all 234 Day 1–7 tests and adds real-engine controller integration, stale-session cancellation, rapid controls, pause/resume, reset, faults/limits, memory/machine-code projections, and marker/source mapping tests. Only scheduling is simulated; assembler/CPU results are real. `npm run typecheck` also checks positive/negative engine contracts. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
+`npm test` preserves all 262 Day 1–8 tests and adds debugger tests for exact breakpoint mapping, stop/resume/Step, loops, self-modification, trace fields/faults/limits/500-entry retention, history navigation, cancellation, and consistency across execution modes. Only scheduling is simulated; assembler/CPU results are real. `npm run typecheck` also checks positive/negative engine contracts. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
 
 Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Assembly does not prove runtime validity: the CPU checks taken targets, memory accesses, SP changes, and decoded bits during execution. Runtime state is in memory and is not restored from browser draft storage.
 
-## Pausing after Day 8
+## Pausing after Day 9
 
-Day 8 stops with live engine integration and bounded visualization. On returning, run the documented checks and complete the pending browser checklist before debugger work. Days 9–11 breakpoints/tracing and Days 12–13 custom testing have not started. No deployment or GitHub operations are part of this work.
+Day 9 stops with interactive source breakpoints and bounded, read-only trace inspection. The existing tests and documented browser checklist provide the baseline for Day 10; Day 10 has not started. Time travel, advanced watchpoints, and custom test-case execution remain unavailable. No deployment or GitHub operations are part of this work.
