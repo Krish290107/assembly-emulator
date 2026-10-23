@@ -1,0 +1,16 @@
+/node_modules/
+/.next/
+/out/
+/dist/
+/coverage/
+/public/monaco/
+*.tsbuildinfo
+next-env.d.ts
+*.log
+.env*
+!.env.example
+.DS_Store
+Thumbs.db
+.vercel/
+/test-results/
+/playwright-report/
