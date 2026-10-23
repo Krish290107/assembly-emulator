@@ -17,6 +17,7 @@ import "monaco-editor/editor/contrib/tokenization/browser/tokenization";
 import "monaco-editor/editor/contrib/wordOperations/browser/wordOperations";
 import { useEffect, useState } from "react";
 import { configureAssembly, LANGUAGE_ID } from "@/lib/editor/language";
+import { EditorFallback } from "./editor-fallback";
 
 // Bundle from source so npm's patched sanitizer is used, rather than the
 // sanitizer embedded in Monaco's prebuilt AMD distribution.
@@ -33,20 +34,15 @@ export interface AssemblyEditorProps {
 
 export default function AssemblyEditor({ code, onChange, onPositionChange }: AssemblyEditorProps) {
   const [failed, setFailed] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    if (mounted) return;
     const timer = window.setTimeout(() => setFailed(true), 15000);
-    let active = true;
-    loader.init().then(() => window.clearTimeout(timer)).catch(() => { if (active) setFailed(true); });
-    return () => { active = false; window.clearTimeout(timer); };
-  }, []);
+    return () => window.clearTimeout(timer);
+  }, [mounted]);
 
-  if (failed) return (
-    <div className="editor-fallback">
-      <p role="status">Monaco could not load. You can keep editing in this plain-text editor.</p>
-      <textarea aria-label="Assembly source" value={code} onChange={(event) => onChange(event.target.value)} spellCheck={false} />
-    </div>
-  );
+  if (failed) return <EditorFallback code={code} onChange={onChange} onPositionChange={onPositionChange} />;
 
   return (
     <Editor
@@ -56,7 +52,8 @@ export default function AssemblyEditor({ code, onChange, onPositionChange }: Ass
       value={code}
       beforeMount={configureAssembly}
       onChange={(value) => onChange(value ?? "")}
-      onMount={(editor) => {
+      onMount={(editor: monaco.editor.IStandaloneCodeEditor) => {
+        setMounted(true);
         const position = editor.getPosition();
         if (position) onPositionChange(position.lineNumber, position.column);
         const subscription = editor.onDidChangeCursorPosition(({ position }) => onPositionChange(position.lineNumber, position.column));
@@ -82,6 +79,7 @@ export default function AssemblyEditor({ code, onChange, onPositionChange }: Ass
         glyphMargin: false,
         folding: true,
         wordWrap: "off",
+        scrollbar: { horizontalScrollbarSize: 10, verticalScrollbarSize: 10 },
         contextmenu: true,
         stickyScroll: { enabled: false },
         quickSuggestions: false,

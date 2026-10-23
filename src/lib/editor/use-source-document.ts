@@ -3,17 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveState, SourceDocument } from "@/types/ide";
 import { INITIAL_DOCUMENT } from "./examples";
-import { needsReplacementConfirmation, persistDocument, restoreDocument, sourceDownload } from "./document";
+import { confirmSourceReplacement, persistDocument, restoreDocument, sourceDownload } from "./document";
 
 export function useSourceDocument() {
   const [document, setDocument] = useState<SourceDocument>(INITIAL_DOCUMENT);
   const [ready, setReady] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [saveState, setSaveState] = useState<SaveState>("loading");
   const [notice, setNotice] = useState<string | null>(null);
   const current = useRef(document);
   const downloadedCode = useRef(INITIAL_DOCUMENT.code);
-  const savedCode = useRef(INITIAL_DOCUMENT.code);
+  const savedCode = useRef<string | null>(null);
   const storageAvailable = useRef(true);
+  const autosaveEnabled = useRef(false);
 
   /* eslint-disable react-hooks/set-state-in-effect -- Restore browser-only storage after hydration so server and initial client renders match. */
   useEffect(() => {
@@ -26,11 +28,12 @@ export function useSourceDocument() {
         downloadedCode.current = "";
         setDocument(restored);
       }
-      setSaveState("saving");
+      autosaveEnabled.current = true;
+      setSaveState(restored ? "saved" : "saving");
     } catch {
       storageAvailable.current = false;
       setSaveState("unavailable");
-      setNotice("Your saved draft could not be restored. Autosave will retry; download your source to keep a copy.");
+      setNotice("Your saved draft could not be restored. It will stay untouched until you edit or replace the source. Download a copy to keep your work.");
     }
     setReady(true);
   }, []);
@@ -50,7 +53,7 @@ export function useSourceDocument() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !autosaveEnabled.current) return;
     const timer = window.setTimeout(() => save(document), 400);
     return () => window.clearTimeout(timer);
   }, [document, ready, save]);
@@ -58,11 +61,7 @@ export function useSourceDocument() {
   useEffect(() => {
     if (!ready) return;
     const flush = () => {
-      try {
-        persistDocument(window.localStorage, current.current);
-        savedCode.current = current.current.code;
-        storageAvailable.current = true;
-      } catch { storageAvailable.current = false; }
+      if (autosaveEnabled.current) save(current.current);
     };
     const onVisibility = () => { if (window.document.visibilityState === "hidden") flush(); };
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -80,20 +79,23 @@ export function useSourceDocument() {
       window.removeEventListener("beforeunload", beforeUnload);
       window.document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [ready]);
+  }, [ready, save]);
 
   function updateCode(code: string) {
     const next = { ...current.current, code };
     current.current = next;
+    autosaveEnabled.current = true;
     setDocument(next);
     setSaveState("saving");
   }
 
   function replaceDocument(next: SourceDocument): boolean {
-    if (needsReplacementConfirmation(current.current, downloadedCode.current)
-      && !window.confirm("Replace the current source? Download a copy first if you want to keep it. The autosaved draft will also be replaced.")) return false;
+    if (!confirmSourceReplacement(current.current, downloadedCode.current, () =>
+      window.confirm("Replace the current source? Download a copy first if you want to keep it. The autosaved draft will also be replaced."))) return false;
     current.current = next;
+    autosaveEnabled.current = true;
     setDocument(next);
+    setRevision((value) => value + 1);
     setSaveState("saving");
     return true;
   }
@@ -114,5 +116,5 @@ export function useSourceDocument() {
     } catch { setNotice("The download could not be started. Try again or copy your source from the editor."); }
   }
 
-  return { document, ready, saveState, notice, setNotice, updateCode, replaceDocument, download };
+  return { document, revision, ready, saveState, notice, setNotice, updateCode, replaceDocument, download };
 }

@@ -10,10 +10,10 @@ export function configureAssembly(monaco: Monaco) {
       tokenizer: {
         root: [
           [/;.*/, "comment"],
+          [/[a-z_]\w*(?=\s*:)/, "type.identifier"],
           [/\b(MOV|ADD|SUB|INC|DEC|CMP|JMP|JZ|JNZ|PUSH|POP|CALL|RET|NOP|HLT|LOAD|STORE)\b/, "keyword"],
           [/\b(A|B|PC|SP)\b/, "variable.predefined"],
           [/\b0x[\da-f]+\b|\b0b[01]+\b|\b\d+\b/, "number"],
-          [/[a-z_]\w*(?=\s*:)/, "type.identifier"],
           [/"[^"\n]*"|'[^'\n]*'/, "string"],
           [/[,:\[\]]/, "delimiter"],
         ],

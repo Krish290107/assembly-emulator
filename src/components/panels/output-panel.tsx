@@ -20,8 +20,6 @@ export function OutputPanel() {
   const [active, setActive] = useState<OutputTab>("output");
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const id = useId();
-  const selected = TABS.find((tab) => tab.id === active)!;
-  const Icon = selected.icon;
   return (
     <section className="output-panel" aria-label="Program results">
       <div className="output-tabbar" role="tablist" aria-label="Result views">
@@ -37,7 +35,7 @@ export function OutputPanel() {
           tabs.current[next]?.focus();
         }}><tab.icon size={14} />{tab.title}</button>)}
       </div>
-      <div role="tabpanel" id={`${id}-${active}-panel`} aria-labelledby={`${id}-${active}-tab`} tabIndex={0} className="empty-state output-empty"><Icon size={25} strokeWidth={1.4} /><h3>{selected.heading}</h3><p>{selected.text}</p></div>
+      {TABS.map((tab) => <div key={tab.id} role="tabpanel" id={`${id}-${tab.id}-panel`} aria-labelledby={`${id}-${tab.id}-tab`} hidden={active !== tab.id} tabIndex={0} className="empty-state output-empty"><tab.icon size={25} strokeWidth={1.4} /><h3>{tab.heading}</h3><p>{tab.text}</p></div>)}
     </section>
   );
 }
