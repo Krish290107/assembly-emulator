@@ -1,6 +1,6 @@
 # Assembly Emulator ISA v1
 
-**ISA finalized for Day 3; complete assembler implemented on Day 5.** This is the normative language/CPU profile for this project. The pure parser and two-pass assembler resolve symbols and generate machine-code images. Loading, CPU execution, debugging, and test execution are not implemented. Instruction effects below specify future CPU behavior, not current execution results.
+**ISA finalized for Day 3; assembler completed on Day 5; CPU foundation added on Day 6.** This is the normative language/CPU profile for this project. Assembly, program loading, reset, memory access, and instruction decoding are implemented as internal TypeScript APIs. Instruction execution, debugging, and test execution are not implemented. Instruction effects below specify future CPU behavior, not current execution results.
 
 ## Machine state and addresses
 
@@ -12,11 +12,11 @@
 
 ### Initial state, loading, reset, and stack
 
-Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted instructions, and status idle, with no loaded program. The UI still shows absent state while no CPU engine exists.
+Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted instructions, and status idle, with no loaded program. This state is implemented internally; the UI still shows absent state because CPU integration is not implemented.
 
-A future successful image loads at word address 0, replacing memory after zero-fill. There is no origin directive; `MachineCode.origin` is 0 in ISA v1. Every instruction and data directive occupies one word; a label-only line occupies none. An image must fit in memory. A zero-word image is not runnable and remains idle; a nonempty loaded image is ready.
+A successful image loads at word address 0, replacing memory after zero-fill. There is no origin directive; `MachineCode.origin` is 0 in ISA v1. Every instruction and data directive occupies one word; a label-only line occupies none. An image must fit in memory. A zero-word image is not runnable and remains idle; a nonempty loaded image is ready.
 
-Reset restores the initial registers, zero-fills memory, reloads the last successfully loaded image (if any), and clears the attempt counter, trace, program output, and runtime diagnostics. It returns to ready for a nonempty image, otherwise idle. Source, configured breakpoints, speed, and test definitions are retained. No reset behavior is implemented yet.
+Reset restores the initial registers, zero-fills memory, reloads the last successfully loaded image (if any), and clears the attempt counter, trace, program output, and runtime diagnostics. It returns to ready for a nonempty image, otherwise idle. The Day 6 API implements register/memory/image/counter reset and clears its diagnostic/trace collections; output generation and trace recording do not exist. Source, configured breakpoints, speed, and test definitions remain outside this API and are retained by their future owners. Loaded source mappings and the configured execution limit are preserved.
 
 The stack grows downward by convention: `adj -n` reserves n words; `adj n` releases them. Memory-stack allocation/push/pop is never implicit: only adj/a2sp change SP, while all A/B effects still follow the instruction table. SP movement outside 0–65,536 faults; overlapping code/data or accessing an unallocated but in-range word does not. `call` does not use memory or SP. Nested calls must explicitly save return links in memory and later restore them to A before `return`.
 
@@ -59,7 +59,7 @@ Each instruction is one 32-bit word:
 - Bits 31–8: a **signed 24-bit** two's-complement operand, -8,388,608 through 8,388,607.
 - Instructions with no operand must encode all 24 operand bits as zero. Nonzero bits are an invalid instruction encoding, not ignored padding.
 - Mathematically, the bit pattern is `((v modulo 2^24) << 8) | opcode`. The implemented encoder validates the operand before using `(v << 8) | opcode`; JavaScript's 32-bit shift preserves exactly these bits for every valid operand.
-- Files serialize each word as exactly four bytes in **little-endian** order: opcode/low byte first, then successively more significant bytes. The operand sign bit is bit 31 of the complete word. File lengths must be multiples of four; a future loader rejects malformed/oversized images before replacing existing state.
+- Files serialize each word as exactly four bytes in **little-endian** order: opcode/low byte first, then successively more significant bytes. The operand sign bit is bit 31 of the complete word. File lengths must be multiples of four; the loader rejects misaligned/oversized images before replacing existing state.
 
 The separate `data` directive contributes one full signed 32-bit word serialized in the same byte order. It has **no opcode** and is not an instruction alias. Memory contains no code/data tags: branching into data decodes its bit pattern as an instruction, which can either execute a valid encoding or fault. Falling beyond the loaded image is not automatically HALT; in-range zero-filled memory can be fetched.
 
@@ -178,9 +178,43 @@ HALT
 
 End columns above are exclusive. Source-map byte offsets are 0, 4, and 8. `br -1` independently encodes as `FFFFFF11` / `11 FF FF FF`; `data -1` encodes as `FFFFFFFF` / `FF FF FF FF`.
 
-## HALT, faults, and execution limits (future engine)
+## CPU foundation API (Day 6)
 
-There is no CPU implementation today. Future instruction attempts follow this order:
+`src/lib/cpu/index.ts` exposes a React-independent CPU API, using the existing `CpuState`, `MachineCode`, execution status/limit contracts, and ISA constants. `src/types/cpu.ts` adds detached snapshot, decoded instruction, `CpuResult<T>`, and structured runtime diagnostic types.
+
+| API | Implemented behavior |
+| --- | --- |
+| `createCpu(): Cpu` | Returns an opaque frozen handle for private registers, a 65,536-word `Int32Array`, and lifecycle bookkeeping in the cold state |
+| `loadProgram(cpu, machineCode): CpuResult<void>` | Validates/copies a complete origin-zero image, then clears memory, loads little-endian signed words, resets registers/count/diagnostic and trace collections, and sets ready/idle |
+| `resetCpu(cpu): void` | Restores the most recently loaded image and initial machine state; preserves image metadata and configured limit |
+| `getCpuSnapshot(cpu): CpuFoundationSnapshot` | Returns detached registers, memory, program bytes/source maps, status, attempt count, limits, and diagnostic/trace collections |
+| `decodeInstruction(word): CpuResult<DecodedInstruction>` | Pure opcode/operand decode with the exact input word preserved |
+| `fetchInstruction(cpu, address?): CpuResult<DecodedInstruction>` | Reads at PC by default, or at an explicit word address, and decodes without executing or changing PC/count/status |
+| `readMemory(cpu, address)` / `writeMemory(cpu, address, value)` | Checked word access, returning a `CpuResult` with the value or `undefined` on successful write |
+| `writeRegister(cpu, name, value)` | Checked A/B/PC/SP setup; does not execute an instruction |
+| `setExecutionLimit(cpu, maxInstructions)` | Validates/stores a future cumulative attempt limit; does not count or execute attempts |
+
+`CpuResult<T>` is `{ ok: true, value: T }` or `{ ok: false, diagnostic: RuntimeDiagnostic }`. Failed operations have no value. Invalid image/setup/fetch/decode operations return diagnostics without mutating the CPU or appending runtime state. Today only idle and ready transitions exist. Decoding HALT does not halt the CPU, and decoding errors do not set status error. The attempt count remains zero; diagnostic/trace collections are initialized and reset but no execution faults or traces are recorded yet. All other lifecycle statuses are reserved for future execution. Passing a forged/foreign CPU handle is a programming error and throws `TypeError`.
+
+### Loading, ownership, and reset
+
+The loader accepts `MachineCode` with origin exactly 0, `Uint8Array` bytes (including views/Node Buffers), and a byte length divisible by four in 0–262,144. It validates first and copies bytes and typed source-map metadata before committing. Failure preserves the entire previous state and the previous reset image. Loading never interprets data/instruction encodings, so any signed 32-bit word pattern can be installed. Words are read via little-endian `DataView.getInt32`, starting at memory word 0; all remaining memory is zero. A nonempty image becomes ready, including data-only images; ready does not prove valid runtime behavior. An empty image becomes idle and replaces the previous reset image.
+
+Memory and saved binary/source metadata are private. Changing the assembler result after load cannot change memory or the image used by reset. Snapshots are deep copies; changing snapshot memory, registers, bytes, nested source ranges, or limits cannot corrupt the CPU. Loads/resets reuse internal memory and clear it before restoring words; memory copying occurs only on explicit snapshots, not on register writes, reads, fetches, or configuration changes. Snapshotting deliberately copies the 256 KiB memory array and saved image. The source document, symbols, and browser state remain owned outside the CPU.
+
+### Decode, fetch, and validation
+
+The pure decoder accepts integer numbers represented either as signed 32-bit values (-2,147,483,648 through 2,147,483,647) or unsigned 32-bit bit patterns (0 through 4,294,967,295). It preserves the exact input number in `word`, reads `opcode = word & 0xff`, and sign-extends `operand = word >> 8`. Metadata determines mnemonic and operand presence. Opcodes 19–255 and nonzero operand bits for operand-free instructions fail. Nonintegers/out-of-range numbers fail before bitwise conversion. CPU memory always stores the signed representation, so fetched `word` values are signed.
+
+Fetch validates an integer word address 0–65,535 and attaches that address to decode errors. The optional inspection address never changes PC. Fetch may inspect zero-filled memory beyond the image or in a cold/empty CPU; decoding those bits is not execution or a transition to ready. Instruction attempts, budget enforcement, taken-target checking, arithmetic/shift behavior, and atomic execution faults remain Day 7 work.
+
+Pure helpers `isSignedWord`, `isValidRegisterValue`, `isValidPc`, `isValidSp`, `isMemoryAddress`, `isValidImageSize`, and `isValidExecutionLimit` enforce integer/range rules without coercion, truncation, or wrapping. Setup writes require already-valid signed A/B/memory values; future instruction arithmetic will apply ISA wrapping separately. SP may be 65,536 while PC and memory addresses may not. The default limit is 100,000; custom limits are integers 1–10,000,000 and persist across loads/resets.
+
+Runtime diagnostic codes are C001_INVALID_WORD, C002_INVALID_OPCODE, C003_INVALID_ENCODING, C004_INVALID_PC, C005_INVALID_ADDRESS, C006_INVALID_REGISTER, C007_INVALID_MEMORY_VALUE, C008_INVALID_ORIGIN, C009_INVALID_IMAGE_SIZE, C010_INVALID_EXECUTION_LIMIT, and C011_INVALID_IMAGE_TYPE. They extend existing diagnostics with optional `address`/`word` fields. Fetch/decode errors preserve the offending word when applicable; no source/trace association or execution accounting is invented.
+
+## HALT, faults, and execution limits (future execution)
+
+The CPU foundation exists, but no instruction execution is implemented today. Future instruction attempts follow this order:
 
 1. Check the cumulative attempt budget before fetching. If exhausted, stop with status limit-reached without another attempt or state mutation.
 2. Increment the attempt count, validate PC, fetch/decode, then validate opcode and zero payload for operand-free instructions.
@@ -193,8 +227,8 @@ Default budget: **100,000 attempts**; caller-configured budget: integer **1–10
 
 Future tests start from reset + loaded image + validated optional initial-state overrides, then run under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP overrides/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate memory overrides/assertions or duplicate assertions on the same target are invalid test definitions. A test passes only after normal HALT and matching assertions; fault, limit, invalid setup, or no runnable image fails. Tests, trace recording, and assertion evaluation are not implemented.
 
-## Day 6 boundary
+## Day 7 boundary
 
-`src/lib/assembler/isa.ts` holds unchanged instruction metadata and architectural constants. The scanner/parser, first and second passes, and public `assembleSource` API implement assembly under the existing React-independent contracts. The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not wired to live editor diagnostics.
+`src/lib/assembler/isa.ts` holds unchanged instruction metadata and architectural constants. The scanner/parser, both assembler passes, and CPU foundation use React-independent contracts. The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not wired to live editor diagnostics or CPU panels.
 
-Day 5 stops with a complete machine-code image and source mappings. CPU loading/execution, reset behavior, debugger, trace, and test execution are future work. No CPU state or execution result is produced by the assembler.
+Day 6 stops at initialization, checked memory/register setup, atomic program loading, deterministic reset, pure decoding, and read-only fetch. Instruction execution, attempt accounting, budget enforcement, debugger, trace recording, and test execution are future work. The assembler still produces no CPU state or execution result.

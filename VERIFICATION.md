@@ -1,4 +1,36 @@
-# Day 5 verification
+# Day 6 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using existing **Node 26.2.0 / npm 11.13.0**. The only available Node executable is the existing system installation; **Node 24.x remains the target and was not available for verification**. No runtime was installed or switched.
+
+## Day 6 actual results
+
+| Command / check | Result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; existing fixtures plus opaque-handle/result-narrowing CPU fixtures |
+| `npm test` | PASS; **168 tests, 0 failures**, all 123 existing tests plus 45 CPU foundation tests; none skipped |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript, static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Browser/UI interaction | NOT RUN this day; UI, editor, file handling, examples, and controls are unchanged |
+
+Created `src/lib/cpu/index.ts`, `decoder.ts`, `validation.ts`, and `diagnostics.ts`; added `src/types/cpu.ts`, `tests/cpu.test.mjs`, and `tests/cpu.typecheck.ts`. Updated README, ISA documentation, and this verification record. Existing engine contracts, assembler/parser/ISA metadata, all 123 prior runtime tests, package manifests/lockfile, configuration, and UI were preserved. No new dependencies or test framework were needed.
+
+CPU handles own private signed-word memory, registers, loaded program bytes/metadata, and bookkeeping. The cold state is A/B/PC 0, SP 65,536, zero-filled 65,536-word memory, idle, and zero attempts. Loading validates image type/origin/alignment/capacity before installing, reads little-endian signed words, clears unused memory, resets registers/count, and sets ready for a nonempty image or idle for an empty image. Failed loads leave the entire existing state and reset image unchanged. Reset restores the latest owned image, zeroes unused memory, restores initial registers/count, clears diagnostic/trace collections, and preserves source mappings/configured limits. Snapshots are deep copies; source input and snapshot mutation cannot corrupt the CPU.
+
+The decoder recognizes all 19 metadata-defined opcodes and sign-extends 24-bit operands. It preserves its exact signed/unsigned 32-bit input number and rejects other numeric values, opcodes 19–255, and nonzero operand bits for operand-free instructions. Loaded words are signed. Fetch validates word addresses, attaches addresses to decode errors, and changes no PC, count, status, or state. Invalid instruction bits remain legal to load as data. Checked setup helpers enforce signed A/B/memory values, PC 0–65,535, SP 0–65,536, and future limits of 1–10,000,000 (default 100,000), without silent wrapping/truncation.
+
+New tests cover cold/ready/idle state; exact zero-filled and signed memory; all 19 opcodes; positive/negative/minimum/maximum operands; every unsupported opcode; invalid payloads on all eight operand-free opcodes; invalid numeric inputs; word-addressed fetch without advancement/counting; zero-filled fetch beyond the image; exact little-endian loading; empty/data-only images; misalignment/oversize/origin/type rejection; failed-load atomicity; exactly 65,536 words and the final memory cell; independent image/source-map ownership, Buffer/view offsets, and detached snapshots; latest-image/repeated reset; checked memory/register/PC/SP boundaries; limit validation/persistence; and assembler-to-loader-to-decoder integration. Initial typecheck caught a widened boolean in the opaque handle declaration; the literal type was corrected before final typecheck/build passed.
+
+An exact integration fixture assembles `start: ldc value`, `call done`, `value: data -2147483648`, `done: br start`, `HALT`. Loaded signed words are **[512, 269, -2147483648, -1007, 18]**. Fetch/decode reports `ldc 2`, `call 1`, `ldc -8388608` for the data bit pattern, and `br -4` at the inspected addresses. This demonstrates that decoding follows bits without code/data tags. Registers remain at their initial values and attempts remain zero: these are loading/decoding results, not execution results.
+
+Only idle/ready transitions are implemented. Runtime errors are returned as structured diagnostics; error status, execution attempts, faults, trace recording, instruction effects, arithmetic/branching, debugger, and budget enforcement are not implemented. The empty diagnostic/trace collections are prepared/reset only; no execution traces were generated. Assemble/Run/Step/Pause/Reset stay disabled, and no internal CPU data is displayed in the UI.
+
+No packages, runtime, browser binaries, or testing frameworks were downloaded/installed. The requested production audit fetched registry advisory metadata only. Node 24 validation and browser interaction checks remain pending. No commits, pushes, GitHub/Vercel operations, deployments, instruction execution, or Day 7 work occurred. The foundation is ready for later execution work; Day 6 is complete.
+
+The Day 5 and earlier results below are historical.
+
+## Day 5 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using the existing **Node 26.2.0 / npm 11.13.0**. Node 24 is unavailable in the existing environment; the project target remains **24.x**, and verification on that target remains pending. No runtime was installed or switched.
 

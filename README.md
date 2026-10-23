@@ -1,6 +1,6 @@
 # Assembly Emulator
 
-Days 1–5 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA and a complete pure TypeScript two-pass assembler. **The assembler is available through its internal API; UI assembly integration, CPU loading/execution, debugger, and test execution engine are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) defines ISA v1 and its syntax, memory, encoding, faults, and limits.
+Days 1–6 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, a complete two-pass assembler, and a CPU foundation for loading, memory, reset, fetch, and decoding. **These engines are internal TypeScript APIs; instruction execution, UI engine integration, debugger, and test execution are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) defines ISA v1 and its syntax, memory, encoding, faults, and limits.
 
 ## Stack and setup
 
@@ -68,6 +68,29 @@ Those words are `00000A00`, `00000501`, and `00000012` in hex. The success resul
 
 The API is pure and independent of React/browser APIs. It does not execute the image or connect to the editor's Assemble button. UI/file-handling behavior and disabled engine controls are preserved.
 
+## Day 6 CPU foundation
+
+`src/lib/cpu/index.ts` exposes `createCpu`, `loadProgram`, `resetCpu`, `getCpuSnapshot`, `decodeInstruction`, and `fetchInstruction`, plus checked memory/register setup and execution-limit helpers. Cold state is A/B/PC 0, SP 65,536, zero-filled `Int32Array(65536)`, zero attempts, and idle status. Memory is word-addressed; SP alone may point one past its end.
+
+Loading validates origin 0, aligned byte length, and the 262,144-byte capacity before changing state. It owns a copy of the bytes and source mappings, reads little-endian signed words, clears unused memory, resets registers/count, and sets ready for a nonempty image or idle for an empty one. Failed loads preserve the prior state and reset image. Reset restores the latest successful image, clears memory/register changes and bookkeeping collections, and retains the configured future execution limit.
+
+```ts
+import { assembleSource } from "./src/lib/assembler/index.ts";
+import { createCpu, loadProgram, readMemory, fetchInstruction } from "./src/lib/cpu/index.ts";
+
+const assembled = assembleSource("ldc 10\nHALT");
+const cpu = createCpu();
+if (assembled.status === "success" && loadProgram(cpu, assembled.program).ok) {
+  console.log(readMemory(cpu, 0)); // { ok: true, value: 2560 }
+  console.log(fetchInstruction(cpu));
+  // { ok: true, value: { word: 2560, opcode: 0, mnemonic: "ldc", operand: 10 } }
+}
+```
+
+This inspects loaded bits without executing `ldc`: A/B/PC remain 0, SP remains 65,536, and attempts remain 0. Decoding checks all 19 opcodes, signed 24-bit operands, and zero payloads on operand-free instructions. Standalone decoding accepts signed or unsigned 32-bit representations and preserves the input number; fetched words are signed. Invalid data encodings may load successfully and fail only when decoded.
+
+CPU handles keep memory and the saved image private. `getCpuSnapshot` explicitly deep-copies state, including 256 KiB memory and program metadata; changing the snapshot or original binary cannot corrupt the CPU. `readMemory`/`writeMemory` and `writeRegister` validate values before access. Operations return `{ ok: true, value }` or a structured `{ ok: false, diagnostic }`; reset returns void. Fetch defaults to PC, accepts an optional word address for inspection, and changes no state. Execution-limit validation stores 100,000 by default or a custom integer 1–10,000,000; enforcement belongs to future execution. Only idle/ready statuses are produced today. See the ISA document for signatures, ownership details, and diagnostic codes.
+
 ## Architecture
 
 ```text
@@ -78,19 +101,20 @@ src/components/panels/    CPU, memory, results, documentation, tests
 src/components/toolbar/   File actions and disabled execution controls
 src/lib/editor/           Document I/O, autosave hook, examples, language
 src/lib/assembler/        ISA metadata, scanner, parser, both passes, and public API
+src/lib/cpu/              Private CPU state, loading/reset, validation, and decoder
 src/types/                UI/source types and React-independent engine contracts
 scripts/                  Local Monaco asset preparation
-tests/                    Dependency-free Node tests for documents, parser, and assembler
+tests/                    Dependency-free Node tests for documents, assembler, and CPU foundation
 ```
 
-State stays in React; there is no global state library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
+UI state stays in React; CPU instances use private local state behind opaque handles and are not connected to the UI. There is no global state library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
 
 ## Verification and limitations
 
-`npm test` preserves all 77 Day 1–4 tests and adds exact encodings for all 19 instructions, full binary fixtures, absolute/relative resolution, literal and data boundaries, source maps, error propagation, capacity, determinism, and input-immutability checks. `npm run typecheck` also checks positive/negative contract fixtures, including signed word memory. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` so the existing native Node test runner can import the pure modules without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
+`npm test` preserves all 123 Day 1–5 tests and adds CPU initialization, loading/reset, decoder, memory/PC/SP/limit boundaries, ownership, failed-load atomicity, capacity, and assembler integration checks. `npm run typecheck` also checks positive/negative contracts, including opaque CPU handles and signed word memory. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` so the existing native Node test runner can import the pure modules without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
 
 Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Complete assembly checks symbols, capacity, operand ranges, and encoding; it does not prove runtime validity. Numeric branch targets, memory accesses, SP changes, and decoded data are checked by the future CPU when relevant. No execution results are produced.
 
-## Day 6 readiness
+## Day 7 readiness
 
-The complete origin-zero binary, symbols, diagnostics, and byte-based source mappings are ready for future CPU work. Day 5 stops before loading or executing any image; UI integration and debugger behavior remain future work.
+Loaded private machine state, checked helpers, structured diagnostics, decoding, reset, and validated future limits are ready for instruction execution work. Day 6 stops before arithmetic/branch execution, attempt counting, execution trace, debugger, or UI integration.
