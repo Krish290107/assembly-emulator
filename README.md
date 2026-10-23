@@ -4,7 +4,7 @@ Days 1–2 of a 15-day project: a browser-local assembly source workspace with d
 
 ## Stack and setup
 
-Next.js App Router, React, TypeScript, Tailwind CSS, Monaco (`@monaco-editor/react`), Lucide, ESLint, and npm. Use Node.js 22.18+ (a supported LTS release is recommended) and npm 10+; the native test runner uses Node's built-in TypeScript stripping. Initial verification uses the machine's Node 26.2.0 / npm 11.13.0.
+Next.js App Router, React, TypeScript, Tailwind CSS, Monaco (`@monaco-editor/react`), Lucide, ESLint, and npm. Use Node.js **24.x** and npm 10+; the native test runner uses Node's built-in TypeScript stripping. The bounded Node engine selects Vercel's supported 24.x major and overrides a differing dashboard selection. No dashboard settings are changed by editing this repository. Local checks have run on the existing Node 26.2.0 / npm 11.13.0; Node 26 is outside the declared target, and Node 24 verification remains pending. Switch to Node 24 before a fresh dependency installation to avoid an engine mismatch warning.
 
 ```powershell
 cd C:\Zekrui\assembly-emulator

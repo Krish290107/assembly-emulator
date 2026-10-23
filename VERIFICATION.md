@@ -2,6 +2,21 @@
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using Node 26.2.0 and npm 11.13.0.
 
+## Deployment warning review
+
+| Warning | Finding and action |
+| --- | --- |
+| Unbounded Node `>=22.18.0` | Changed `package.json` and the lockfile's root engine to `24.x`. This prevents automatic movement to a future major. [Vercel lists 24.x, 22.x, and 20.x](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions); 24.x is its current default. The manifest overrides a differing dashboard Node selection; the dashboard itself was not changed. Remote warning removal is not verified without a new deployment. |
+| Unknown npm config `cache-dir` | Deferred: absent from the repository, local npm config files, and relevant environment variables. Local npm commands do not reproduce the warning. npm's supported option is `cache`; an external command, environment, or build platform may be supplying `cache-dir`, but its remote source is unconfirmed. No Vercel cache path, install command, logging level, or environment setting was overridden. If this is a user-defined deployment option, replace only that option with npm's `cache` equivalent while preserving its path; Vercel-managed injection needs platform-side investigation. |
+| Deprecated ESLint 9.39.5 | Deferred: installed `eslint-config-next` 16.4.2 accepts ESLint >=9, and TypeScript ESLint / React Hooks accept 10. However, installed `eslint-plugin-import` 2.32.0, `eslint-plugin-react` 7.37.5, and `eslint-plugin-jsx-a11y` 6.10.2 exclude ESLint 10 in their peer ranges. An ESLint-only major upgrade is not compatible with this dependency set. No peer checks were bypassed or lint coverage removed. |
+| Unapproved `unrs-resolver` postinstall | Inspected; deliberately left unapproved. It is a development dependency through `eslint-config-next` → `eslint-import-resolver-typescript` → `unrs-resolver` 1.12.2. Its `postinstall.js` delegates to `napi-postinstall` 0.3.7 with version checking enabled. The helper exits when a matching native binding is present; if missing, it can spawn npm to install a pinned platform package or download/extract its registry archive and write the native binary. This is a native-binding repair mechanism, not an inert script. No postinstall, blanket approval, rebuild, or script-policy change was executed. |
+
+The installed Windows native binding resolved `./src/app/page` to `src/app/page.tsx` successfully without invoking postinstall. The lockfile includes the Linux platform binding alternatives, but a fresh Vercel/Linux installation has not been tested. Keep optional dependencies enabled. Local npm 11.13.0 has no newer `allow-scripts` / `strict-allow-scripts` policy implementation; a deployment-specific approval/denial policy cannot be validated with this client, so no unsupported setting was added just to silence the warning.
+
+Per the user's no-download choice, all required checks ran on the existing **Node 26.2.0**, outside the newly declared Node 24 target: lint PASS (zero warnings), typecheck PASS, tests **18 passed / 0 failed**, build PASS (no warnings), production audit **0 vulnerabilities**. Node 24 validation remains pending; Node 26 test success is not proof of Node 24 compatibility. A future local install under Node 26 may warn about the engine mismatch; switch the local runtime to Node 24 before installing. No runtime or package was downloaded/installed, and no dependency resolution changed.
+
+Only the engine metadata and related README/verification notes changed. Application behavior, Monaco sanitizer/local worker integration, package scripts, Next configuration, and Vercel-managed settings were preserved. No commits, pushes, deployments, or Day 3 work occurred.
+
 ## Hydration investigation follow-up
 
 The reported unexpected `translate-tooltip-mtz blue sm-root translate hidden_translate` element strongly indicates external DOM injection, most likely a translation extension. No application hydration bug was confirmed. The exact extension and an extension-on/off reproduction remain unverified because browser discovery returned no accessible browsers/apps. A `Next.Metadata / Suspense` component stack alone does not identify which code inserted the unexpected node. [Next.js documents browser extensions modifying HTML as a hydration-error cause](https://nextjs.org/docs/messages/react-hydration-error).
