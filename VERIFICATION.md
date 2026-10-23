@@ -1,4 +1,32 @@
-# Day 3 verification
+# Day 4 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using the existing Node **26.2.0** and npm **11.13.0**. The project still targets **24.x**; Node 24 is unavailable here, so verification on that target remains pending. No runtime was installed or switched.
+
+## Day 4 actual results
+
+| Command / check | Result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; existing engine contract fixtures preserved |
+| `npm test` | PASS; **77 tests, 0 failures**, including all 55 existing tests and 22 new first-pass tests |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript, and static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| UI/browser interaction | NOT RUN this day; no UI, editor, example, or control files changed |
+
+Day 4 adds `src/lib/assembler/first-pass.ts`, first-pass types in `src/types/assembly.ts`, optional related locations on engine diagnostics, and `tests/first-pass.test.mjs`. README and ISA documentation describe the actual internal API and failure/recovery policies. Parser/scanner, ISA metadata, all existing tests, UI, dependencies, lockfile, and configuration are unchanged. Assemble/Run/Step/Pause/Reset remain disabled; no engine actions were enabled.
+
+New coverage checks word addresses for inline/standalone/consecutive labels and mixed instructions/data; case-sensitive and prototype-like names; duplicate definitions with exact primary/original ranges; forward/backward/undefined references retained without numeric resolution; all 19 instructions; signed numeric boundaries; comments/BOM/tabs/CRLF; parser-error recovery and diagnostic preservation/order; failure propagation; exactly 65,536 words; one-word overflow; labels at 65,535 and rejection at 65,536; continuing overflow without address wrap; deterministic results and input immutability; and integration with all shipped examples. The initial example integration test used the wrong fixture field; that test was corrected before the final passing run.
+
+Clarified policies: malformed source lines consume no words and define no labels; first duplicate binding wins while otherwise valid emitting lines still allocate; label-only records are retained at in-range addresses; excess words continue contributing to `wordCount` but cannot enter located output; out-of-range labels cannot enter the symbol table; parser diagnostics precede first-pass diagnostics. Any parser or pass error makes `ok` false. Failed partial results are diagnostic artifacts, not input for future code generation.
+
+All symbol operands remain unresolved, including already-defined and currently undefined names. Undefined-symbol checks, numeric operand/target resolution, encoding/serialization, CPU execution, and debugger work remain for later days. A successful first pass does not establish successful assembly or execution. The module is not wired to live editor diagnostics. Browser behavior was not reverified by the library tests/build.
+
+No packages, runtime, or browser binaries were downloaded/installed; the requested audit fetched registry vulnerability metadata only. No commits, pushes, GitHub/Vercel operations, second-pass implementation, or machine-code generation occurred. Day 5 can consume the symbols, located statements, and unresolved references; work stops after Day 4.
+
+The Day 3 and earlier results below are historical.
+
+## Day 3 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator`, using Node 26.2.0 and npm 11.13.0.
 

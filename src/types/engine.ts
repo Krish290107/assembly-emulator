@@ -17,6 +17,7 @@ export interface Diagnostic {
   code: string;
   message: string;
   source?: SourceRange;
+  related?: readonly { message: string; source: SourceRange }[];
 }
 
 export type Operand = (

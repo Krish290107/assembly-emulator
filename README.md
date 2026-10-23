@@ -1,6 +1,6 @@
 # Assembly Emulator
 
-Days 1–3 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA and a tested pure TypeScript source parser. **The two-pass assembler, CPU emulator, debugger, and test execution engine are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) defines ISA v1 and its syntax, memory, encoding, faults, and limits.
+Days 1–4 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, a pure TypeScript source parser, and the first assembler pass. **The second assembler pass, machine-code generation, CPU emulator, debugger, and test execution engine are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) defines ISA v1 and its syntax, memory, encoding, faults, and limits.
 
 ## Stack and setup
 
@@ -44,6 +44,12 @@ Assemble, Run, Step, Pause, Reset, breakpoints, speed, memory format, and planne
 
 ISA v1 uses signed 32-bit A/B and memory words, 65,536 word-addressed cells, and a descending stack with initial SP 65,536. Instructions carry an 8-bit low opcode and signed 24-bit operand, serialized as four little-endian bytes in future assembler work. Branch/call symbol references are relative to the next instruction. The `data` directive holds one signed 32-bit literal and is separate from the 19 CPU opcodes. Full behavior, including call/return links, wrapping, shifts, faults, and execution limits, is in the ISA document.
 
+## Day 4 first assembler pass
+
+`firstPass(parseSource(source))` in `src/lib/assembler/first-pass.ts` returns a case-sensitive symbol map with source ranges, located statements, word count, diagnostics, success/failure status, and unresolved references tagged for future absolute/relative resolution. It accepts forward references and distinct labels at one location. Duplicate definitions report both locations and retain the first binding.
+
+Allocation starts at word 0; each valid instruction/data consumes one word, and labels consume none. Malformed parser lines contribute neither words nor labels; recovered valid lines remain inspectable, but any error prevents success. Exactly 65,536 words fit. Overflow and labels at address 65,536 are rejected without wrapping. Partial results include only in-range symbols/statements, while the word count includes excess words. All symbol operands stay unresolved, including undefined names. This internal module does not change the editor or enable execution controls.
+
 ## Architecture
 
 ```text
@@ -53,20 +59,20 @@ src/components/layout/    Workspace composition and status bar
 src/components/panels/    CPU, memory, results, documentation, tests
 src/components/toolbar/   File actions and disabled execution controls
 src/lib/editor/           Document I/O, autosave hook, examples, language
-src/lib/assembler/        ISA metadata, scanner, and pure source parser
+src/lib/assembler/        ISA metadata, scanner, parser, and first assembler pass
 src/types/                UI/source types and React-independent engine contracts
 scripts/                  Local Monaco asset preparation
-tests/                    Dependency-free Node tests for document behavior
+tests/                    Dependency-free Node tests for documents, parser, and first pass
 ```
 
 State stays in React; there is no global state library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
 
 ## Verification and limitations
 
-`npm test` preserves the 18 document/shortcut tests and adds instruction, syntax, numeric boundary, source-span, recovery, example/highlighting alignment, and malformed-input parser tests. `npm run typecheck` also checks positive/negative contract fixtures, including signed word memory. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` so the existing native Node test runner can import the pure modules without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
+`npm test` preserves all 55 Day 1–3 tests and adds first-pass symbol, address, duplicate, reference, source-span, recovery, memory-boundary, determinism, and parser-integration coverage. `npm run typecheck` also checks positive/negative contract fixtures, including signed word memory. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` so the existing native Node test runner can import the pure modules without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
 
-Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only: undefined/duplicate symbols, resolved operands, image size, and runtime validity await future phases. No execution results are produced.
+Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. The first pass checks duplicate names and image size; undefined symbols, resolved operand/target validation, encoding, and runtime validity await future phases. No execution results are produced.
 
-## Day 4
+## Day 5 readiness
 
-Use the parsed statements and finalized ISA metadata to begin the planned assembler: word-address assignment, symbol collection/semantic diagnostics, then resolution and encoding in Days 4–5. None of these phases starts on Day 3.
+The symbol table, located statements, unresolved references, and diagnostics are ready for a future second pass using ISA v1's absolute and next-instruction-relative rules. Day 4 stops before operand resolution or encoding.

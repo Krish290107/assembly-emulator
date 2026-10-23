@@ -1,5 +1,5 @@
 import type { InstructionMnemonic } from "../lib/assembler/isa.ts";
-import type { Diagnostic, Operand, SourceRange } from "./engine.ts";
+import type { Diagnostic, Operand, SourceRange, SymbolDefinition } from "./engine.ts";
 
 export interface ParsedLabel {
   name: string;
@@ -16,4 +16,27 @@ export interface ParseResult {
   ok: boolean;
   statements: readonly ParsedStatement[];
   diagnostics: readonly Diagnostic[];
+}
+
+export interface LocatedStatement {
+  address: number;
+  statement: ParsedStatement;
+}
+
+export interface UnresolvedSymbolReference {
+  name: string;
+  address: number;
+  source: SourceRange;
+  mode: "absolute" | "relative";
+}
+
+export interface FirstPassResult {
+  ok: boolean;
+  symbols: ReadonlyMap<string, SymbolDefinition>;
+  /** Includes label-only statements; excludes statements outside memory. */
+  statements: readonly LocatedStatement[];
+  /** All syntactically valid emitting words, including overflow on failure. */
+  wordCount: number;
+  diagnostics: readonly Diagnostic[];
+  unresolvedReferences: readonly UnresolvedSymbolReference[];
 }

@@ -1,6 +1,6 @@
 # Assembly Emulator ISA v1
 
-**Finalized for Day 3.** This is the normative language/CPU profile for this project. The pure source parser exists; symbol resolution, machine-code generation, loading, CPU execution, debugging, and test execution do not. Instructions below specify future behavior, not current execution results.
+**Finalized for Day 3; first assembler pass added on Day 4.** This is the normative language/CPU profile for this project. The pure source parser and symbol/address collection exist; operand resolution, machine-code generation, loading, CPU execution, debugging, and test execution do not. Instructions below specify future behavior, not current execution results.
 
 ## Machine state and addresses
 
@@ -92,7 +92,7 @@ signed-integer := ["+" | "-"] (decimal-digits | "0x" hex-digits)
 - No floats, exponent notation, digit separators, binary/octal prefixes, expressions, commas, bracketed memory operands, string literals, or multiple statements per line.
 - The 11 operand-taking instructions accept exactly one signed 24-bit literal or unresolved symbol. The other eight accept no operand. A literal such as positive `0xFFFFFF` is out of range, not implicitly -1; write `-1`.
 - `data` accepts exactly one signed **32-bit numeric literal**, no symbol. Positive `0xFFFFFFFF` is out of range; use `-1`. There are no SET, .data, .word, or origin directives.
-- Forward and backward symbol references are retained as names. Undefined/duplicate labels remain syntactically parseable until the future semantic pass.
+- Forward and backward symbol references are retained as names. Undefined/duplicate labels remain syntactically parseable. The first assembler pass rejects duplicates; undefined-symbol validation and operand resolution remain deferred.
 
 Example (valid source, not an execution result):
 
@@ -122,6 +122,27 @@ Ranges use one-based line numbers and **UTF-16 code-unit columns**, matching Mon
 
 One blocking diagnostic is returned per malformed line, in source order. That entire line is omitted from statements (including any otherwise valid label on it); scanning/parsing resumes at the next line. Valid lines are retained even when `ok` is false. This is recovery output, not a partially assembled program. A later assembler must refuse code generation when parser errors exist.
 
+## First assembler pass (Day 4)
+
+`firstPass(parseSource(source))` in `src/lib/assembler/first-pass.ts` consumes the parser result without rescanning text or changing its statements. It returns `FirstPassResult`: `ok`, `symbols`, `statements`, `wordCount`, `diagnostics`, and `unresolvedReferences`. It is independent of React and is not connected to the UI.
+
+- The location counter starts at word 0. Each parsed instruction and numeric `data` directive consumes exactly one word. Label-only statements, comments, and blank lines consume none. Invalid lines were omitted by the parser and contribute neither words nor labels; later valid lines are allocated consecutively without gaps. Any parser error still makes the first pass fail.
+- `symbols` is a case-sensitive `ReadonlyMap<string, SymbolDefinition>`, in first-definition order. Each entry preserves the label's spelling and exclusive source range and records its word address. A label on an emitting line names that word. Consecutive distinct label-only lines may alias the same address.
+- Duplicate names fail even when their addresses match. The first declaration remains authoritative; a duplicate does not replace it. A duplicate's otherwise valid instruction/data still consumes one word. The diagnostic points at the duplicate label and has a `related` range for the first declaration, plus its line/column in the message.
+- `statements` retains source order, including label-only statements, as `{ address, statement }` records referencing the original parsed statements. Every returned address is in 0–65,535. No source/AST or input diagnostic is mutated.
+- A trailing label names the next word even when no word follows, provided its address is at most 65,535. Exactly 65,536 emitting words fit; a label following them would name 65,536 and fails. SP's allowed empty-stack value 65,536 does not make that a valid label or memory address.
+- Overflow never wraps. Out-of-range labels are excluded from `symbols`; out-of-range statements and their references are excluded from located output. Each excess emitting word receives an overflow diagnostic. `wordCount` continues counting all syntactically valid emitting words, including excess words, to report the requested size accurately. First declarations are remembered even outside memory so later duplicates still identify the original location.
+- Every in-range instruction symbol operand remains an unresolved reference: `{ name, address, source, mode }`, where `address` is the referring instruction's word address and `source` is the operand range. `mode` is `relative` for call/brz/brlz/br and `absolute` for the other operand-taking instructions. Forward, backward, and currently undefined names are all retained without converting operands or checking target validity. Literal operands and data values are unchanged.
+- Parser diagnostics are copied first, in their original order and with their ranges intact. Pass diagnostics follow in source traversal order; on one line, duplicate, invalid label address, and emitting-word overflow appear in that order when applicable. `ok` is false if parser `ok` is false or any diagnostic is an error. Partial results on failure are for inspection only; a future encoder must reject them. Even a successful first pass does not establish that the program can assemble or run.
+
+| Diagnostic | Meaning |
+| --- | --- |
+| A001_DUPLICATE_LABEL | Repeated case-sensitive name; primary duplicate range and related first-definition range |
+| A002_LABEL_ADDRESS | Label would name an address beyond 65,535 |
+| A003_PROGRAM_OVERFLOW | Instruction/data would occupy a word beyond 65,535 |
+
+For example, `first:`, `alias: ldc later`, `data 7`, `later: HALT` on four successive lines bind `first` and `alias` to 0, `later` to 2, and request three words. The `ldc` operand remains the symbol `later`; this pass does not replace it with 2 or serialize anything.
+
 ## HALT, faults, and execution limits (future engine)
 
 There is no CPU implementation today. Future instruction attempts follow this order:
@@ -137,8 +158,8 @@ Default budget: **100,000 attempts**; caller-configured budget: integer **1–10
 
 Future tests start from reset + loaded image + validated optional initial-state overrides, then run under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP overrides/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate memory overrides/assertions or duplicate assertions on the same target are invalid test definitions. A test passes only after normal HALT and matching assertions; fault, limit, invalid setup, or no runnable image fails. Tests, trace recording, and assertion evaluation are not implemented.
 
-## Day 4 boundary
+## Day 5 boundary
 
-`src/lib/assembler/isa.ts` holds instruction metadata and architectural constants; scanner/parser and `src/types/assembly.ts` provide the parser foundation. `src/types/engine.ts` retains React-independent engine contracts with implicit operands and signed word memory.
+`src/lib/assembler/isa.ts` holds instruction metadata and architectural constants; scanner/parser, first pass, and `src/types/assembly.ts` provide the assembly foundation. `src/types/engine.ts` retains React-independent engine contracts with implicit operands and signed word memory; diagnostics may now include related source locations.
 
-Days 4–5 can collect labels/word addresses, reject semantic errors, resolve absolute/relative operands, and encode/serialize words according to this document. **No symbol resolution, code generation, CPU, or debugger was added on Day 3.** The UI's Assemble/Run/Step and other engine actions remain disabled; the parser is not yet wired to live editor diagnostics.
+Day 5 can consume a successful first pass to check undefined symbols, resolve absolute/relative operands, validate the resulting operand ranges/targets, and encode/serialize words according to this document. **Day 4 stops at symbol/address collection: no second pass, machine-code generation, CPU, or debugger exists.** The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not yet wired to live editor diagnostics.
