@@ -5,15 +5,15 @@ export const EXAMPLES: readonly AssemblyExample[] = [
     id: "first-program",
     title: "First program",
     filename: "first-program.asm",
-    description: "Load two constants and add them. Syntax only; execution is unavailable.",
-    code: "; Assembly Emulator — ISA v1\n; Valid source; assembly and execution are not available yet.\n\nstart:\n    ldc 5\n    ldc 3\n    add\n    HALT\n",
+    description: "Load two constants and add them. Assemble, then Run or Step.",
+    code: "; Assembly Emulator — ISA v1\n; Assemble, then Run or Step to inspect the result.\n\nstart:\n    ldc 5\n    ldc 3\n    add\n    HALT\n",
   },
   {
     id: "countdown",
     title: "Countdown & labels",
     filename: "countdown.asm",
     description: "A loop with a forward branch and case-sensitive labels.",
-    code: "; ISA v1 — syntax example, not an execution result.\n    ldc 3\nloop: brz done\n    adc -1\n    br loop\ndone: HALT\n",
+    code: "; ISA v1 — a countdown with forward and backward branches.\n    ldc 3\nloop: brz done\n    adc -1\n    br loop\ndone: HALT\n",
   },
   {
     id: "memory-data",

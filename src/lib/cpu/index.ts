@@ -1,4 +1,4 @@
-import type { CpuExecutionResult, CpuFoundationSnapshot, CpuResult, DecodedInstruction, RuntimeDiagnostic } from "../../types/cpu.ts";
+import type { CpuExecutionResult, CpuFoundationSnapshot, CpuOverview, CpuResult, DecodedInstruction, RuntimeDiagnostic } from "../../types/cpu.ts";
 import type { CpuState, ExecutionLimits, ExecutionStatus, MachineCode, RegisterName, TraceEntry } from "../../types/engine.ts";
 import { DEFAULT_EXECUTION_LIMIT, MAX_EXECUTION_LIMIT, MEMORY_WORDS } from "../assembler/isa.ts";
 import { fetchDecodedInstruction } from "./decoder.ts";
@@ -43,6 +43,11 @@ export function createCpu(): Cpu {
 /** Return detached registers, memory, program bytes/metadata, and bookkeeping. */
 export function getCpuSnapshot(cpu: Cpu): CpuFoundationSnapshot {
   return structuredClone(stateFor(cpu));
+}
+
+export function getCpuOverview(cpu: Cpu): CpuOverview {
+  const { registers, status, attemptedInstructions, limits, diagnostics } = stateFor(cpu);
+  return structuredClone({ registers, status, attemptedInstructions, limits, diagnostics });
 }
 
 function restore(state: InternalCpu): void {

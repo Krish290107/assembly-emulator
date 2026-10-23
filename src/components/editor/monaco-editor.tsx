@@ -8,6 +8,7 @@ import "monaco-editor/editor/contrib/clipboard/browser/clipboard";
 import "monaco-editor/editor/contrib/comment/browser/comment";
 import "monaco-editor/editor/contrib/contextmenu/browser/contextmenu";
 import "monaco-editor/editor/contrib/find/browser/findController";
+import "monaco-editor/editor/contrib/hover/browser/hoverContribution";
 import "monaco-editor/editor/contrib/folding/browser/folding";
 import "monaco-editor/editor/contrib/indentation/browser/indentation";
 import "monaco-editor/editor/contrib/linesOperations/browser/linesOperations";
@@ -18,6 +19,8 @@ import "monaco-editor/editor/contrib/wordOperations/browser/wordOperations";
 import { useEffect, useState } from "react";
 import { configureAssembly, LANGUAGE_ID } from "@/lib/editor/language";
 import { EditorFallback } from "./editor-fallback";
+import type { Diagnostic } from "@/types/engine";
+import { editorMarkers } from "@/lib/workspace/markers";
 
 // Bundle from source so npm's patched sanitizer is used, rather than the
 // sanitizer embedded in Monaco's prebuilt AMD distribution.
@@ -30,11 +33,24 @@ export interface AssemblyEditorProps {
   code: string;
   onChange: (code: string) => void;
   onPositionChange: (line: number, column: number) => void;
+  diagnostics?: readonly Diagnostic[];
+  currentLine?: number;
 }
 
-export default function AssemblyEditor({ code, onChange, onPositionChange }: AssemblyEditorProps) {
+const NO_DIAGNOSTICS: readonly Diagnostic[] = [];
+export default function AssemblyEditor({ code, onChange, onPositionChange, diagnostics = NO_DIAGNOSTICS, currentLine }: AssemblyEditorProps) {
   const [failed, setFailed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [instance, setInstance] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
+
+  useEffect(() => {
+    const model = instance?.getModel();
+    if (!instance || !model || model.isDisposed()) return;
+    const markers = editorMarkers(diagnostics).map((marker) => ({ ...marker, severity: { error: monaco.MarkerSeverity.Error, warning: monaco.MarkerSeverity.Warning, info: monaco.MarkerSeverity.Info }[marker.severity] }));
+    monaco.editor.setModelMarkers(model, "assembly-emulator", markers);
+    const decorations = instance.createDecorationsCollection(currentLine && currentLine <= model.getLineCount() ? [{ range: new monaco.Range(currentLine, 1, currentLine, 1), options: { isWholeLine: true, className: "current-instruction-line", linesDecorationsClassName: "current-instruction-gutter" } }] : []);
+    return () => { if (!model.isDisposed()) monaco.editor.setModelMarkers(model, "assembly-emulator", []); decorations.clear(); };
+  }, [instance, diagnostics, currentLine]);
 
   useEffect(() => {
     if (mounted) return;
@@ -54,6 +70,7 @@ export default function AssemblyEditor({ code, onChange, onPositionChange }: Ass
       onChange={(value) => onChange(value ?? "")}
       onMount={(editor: monaco.editor.IStandaloneCodeEditor) => {
         setMounted(true);
+        setInstance(editor);
         const position = editor.getPosition();
         if (position) onPositionChange(position.lineNumber, position.column);
         const subscription = editor.onDidChangeCursorPosition(({ position }) => onPositionChange(position.lineNumber, position.column));

@@ -1,6 +1,6 @@
 # Assembly Emulator
 
-Days 1–7 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, a complete two-pass assembler, and a CPU execution engine. **These engines are internal TypeScript APIs; UI engine integration, debugger, and test execution are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) defines ISA v1 and its syntax, memory, encoding, faults, and limits.
+Days 1–8 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, and live CPU execution, registers, memory, and diagnostics. **Breakpoints, historical tracing, and the custom test-case runner are future work.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 8 preserves its semantics.
 
 ## Stack and setup
 
@@ -34,13 +34,24 @@ Monaco is bundled from ESM source, and its plain-text worker is copied from the 
 - Create/upload/example replacement asks for confirmation when nonempty source differs from the last download requested in this session. Restored nonempty drafts are protected too. Cancelling keeps current source; undo history is not a substitute for a backup.
 - Separate closeable documentation and Test Cases panels with section jump navigation. Native modal dialogs provide focus containment, Escape dismissal, and focus restoration. Six guide sections include all 19 opcode definitions, syntax, architecture, and planned register/memory assertions.
 - Parser-valid ISA v1 examples: addition, a countdown with forward/backward labels, and a full-width data constant. Existing saved source is preserved; older MOV/HLT drafts are not migrated or deleted.
-- Explicit empty states for CPU registers A/B/PC/SP, memory, output, diagnostics, trace, and disassembly. No fabricated execution data or passing tests.
+- Real CPU registers/status/attempts, bounded memory and machine-code windows, source diagnostics, and high-level execution messages. No fabricated execution data or custom test pass/fail results.
 
-Assemble, Run, Step, Pause, Reset, breakpoints, speed, memory format, and planned test controls are disabled. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
+Assemble, Run, Step, Pause, Reset, and Slow/Normal/Fast speed are connected to the real engines. Breakpoints and planned test actions remain disabled. Memory shows signed decimal and hexadecimal together. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
+
+## Day 8 browser workflow
+
+1. Write source or choose an example, then **Assemble**. Success reports total instruction/data words, bytes, symbols, and a loaded CPU with zero attempts. Failure clears the executable image and shows line/column diagnostics in Errors and Monaco.
+2. **Step** attempts one instruction. **Run** continues the current ready/paused image; **Pause** cancels pending work before another batch. HALT, faults, and exhausted budgets require **Reset** or reassembly to restart. The reference `ldc 10`, `adc 5`, `HALT` finishes with A=15, B=0, PC=2, SP=65,536, three attempts, halted.
+3. **Reset** restores the loaded image/registers and clears attempts/runtime diagnostics without changing source. Editing or accepting Create/upload/example replacement clears the CPU and binary immediately; Run/Step require reassembly. Undoing back to old source does not resurrect stale machine state.
+4. Inspect A/B/PC/SP and attempt count. Memory displays at most 32 signed/hex words; navigate by decimal/0x address, Previous/Next, PC, or SP (empty-stack SP shows the last 32 cells). Disassembly pages at most 64 current-memory words with decoded bits and original source lines. Data may decode as valid instructions. Modified words are marked; current-line editor highlighting is suppressed when bits no longer match the original image.
+
+The controller owns one private CPU session. Slow uses 1 attempt/200 ms, Normal 64/32 ms, and Fast 512/16 ms; these are maximum batches and timer delays, not guaranteed instruction rates. Every batch yields through a client timer, and pause/reset/reassembly/source changes/unmount invalidate old callbacks. Speed changes scheduling only; CPU semantics and its cumulative 100,000-attempt default budget are unchanged. The UI displays Running while scheduled execution is active; the CPU is paused between batches. Pausing before the first batch leaves the unexecuted CPU ready.
+
+Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages, not instruction history. The Trace panel explicitly reserves recording for Days 9–11; Test Cases remains a separate closeable panel with runner/actions planned for Days 12–13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction checks pending for this environment are listed in `VERIFICATION.md`.
 
 ## Day 3 parser
 
-`parseSource(source)` in `src/lib/assembler/parser.ts` scans text into label-only, instruction, and data statements with structured diagnostics and exclusive source spans. It handles comments, line endings, case-insensitive mnemonics, case-sensitive labels, signed decimal/hex literals, operand counts/ranges, and recovery after malformed lines. Valid lines remain available when other lines fail. It neither resolves symbols nor emits machine code, and it is **not connected to live editor diagnostics**.
+`parseSource(source)` in `src/lib/assembler/parser.ts` scans text into label-only, instruction, and data statements with structured diagnostics and exclusive source spans. It handles comments, line endings, case-insensitive mnemonics, case-sensitive labels, signed decimal/hex literals, operand counts/ranges, and recovery after malformed lines. Valid lines remain available when other lines fail. It neither resolves symbols nor emits machine code. The full pipeline displays its diagnostics when Assemble runs; parsing is not performed on every keystroke.
 
 ISA v1 uses signed 32-bit A/B and memory words, 65,536 word-addressed cells, and a descending stack with initial SP 65,536. Instructions carry an 8-bit low opcode and signed 24-bit operand, serialized as four little-endian bytes by the assembler. Branch/call symbol references are relative to the next instruction. The `data` directive holds one signed 32-bit literal and is separate from the 19 CPU opcodes. Full CPU behavior, including call/return links, wrapping, shifts, faults, and execution limits, is in the ISA document.
 
@@ -48,7 +59,7 @@ ISA v1 uses signed 32-bit A/B and memory words, 65,536 word-addressed cells, and
 
 `firstPass(parseSource(source))` in `src/lib/assembler/first-pass.ts` returns a case-sensitive symbol map with source ranges, located statements, word count, diagnostics, success/failure status, and unresolved references tagged for future absolute/relative resolution. It accepts forward references and distinct labels at one location. Duplicate definitions report both locations and retain the first binding.
 
-Allocation starts at word 0; each valid instruction/data consumes one word, and labels consume none. Malformed parser lines contribute neither words nor labels; recovered valid lines remain inspectable, but any error prevents success. Exactly 65,536 words fit. Overflow and labels at address 65,536 are rejected without wrapping. Partial results include only in-range symbols/statements, while the word count includes excess words. All symbol operands stay unresolved, including undefined names. This internal module does not change the editor or enable execution controls.
+Allocation starts at word 0; each valid instruction/data consumes one word, and labels consume none. Malformed parser lines contribute neither words nor labels; recovered valid lines remain inspectable, but any error prevents success. Exactly 65,536 words fit. Overflow and labels at address 65,536 are rejected without wrapping. Partial results include only in-range symbols/statements, while the word count includes excess words. All symbol operands stay unresolved in this pass; the full pipeline resolves them next.
 
 ## Day 5 complete assembler
 
@@ -66,7 +77,7 @@ if (result.status === "success") {
 
 Those words are `00000A00`, `00000501`, and `00000012` in hex. The success result contains origin-zero `Uint8Array` bytes, a symbol map, diagnostics, and one source-map entry per emitted word (byte offsets 0/4/8 here, length 4, full source-statement ranges). Labels emit no bytes. Failures collect source-specific diagnostics and expose neither a program nor symbols. Undefined references are checked independently; parser/first-pass errors stop encoding. Empty source assembles successfully to zero bytes, which is not a runnable program. Data-only images are legal assembly.
 
-The API is pure and independent of React/browser APIs. It does not execute the image or connect to the editor's Assemble button. UI/file-handling behavior and disabled engine controls are preserved.
+The API is pure and independent of React/browser APIs. The browser controller calls it from Assemble, then loads the image without execution. Existing file handling, autosave, and replacement guards remain independent.
 
 ## Day 6 CPU foundation
 
@@ -110,7 +121,7 @@ if (assembled.status === "success" && loadProgram(cpu, assembled.program).ok) {
 
 All 19 instruction effects follow the unchanged ISA table. Arithmetic wraps signed 32-bit values; shifts validate counts 0–31 before bit operations. Addresses, SP, and next PC are checked as mathematical integers. Effects use old registers and commit together only after validation, including pending memory stores. A fault counts its attempt, records a structured diagnostic, and sets error while preserving registers/memory at the faulting PC. HALT preserves its PC and counts one attempt. Diagnostics include word/address/target and source range when available; no trace is recorded.
 
-Step and batches share one budget across pause/resume. An ordinary instruction using the final attempt commits then stops with limit-reached; HALT/fault take precedence. Exhausted budgets are checked before another fetch. Reset/load are the only operations that reset attempts and restore execution eligibility. Raising a terminal CPU's limit or changing registers/memory does not resume it; limits cannot be lowered below attempts already counted. Batches are synchronous; browser scheduling, animations, controls, breakpoints, and tracing remain future work.
+Step and batches share one budget across pause/resume. An ordinary instruction using the final attempt commits then stops with limit-reached; HALT/fault take precedence. Exhausted budgets are checked before another fetch. Reset/load are the only operations that reset attempts and restore execution eligibility. Raising a terminal CPU's limit or changing registers/memory does not resume it; limits cannot be lowered below attempts already counted. Engine batches are synchronous; the Day 8 controller schedules them between browser turns. Breakpoints and tracing remain future work.
 
 ## Architecture
 
@@ -119,23 +130,24 @@ src/app/                  App Router page, metadata, global styles
 src/components/editor/    Client-loaded Monaco and editor frame
 src/components/layout/    Workspace composition and status bar
 src/components/panels/    CPU, memory, results, documentation, tests
-src/components/toolbar/   File actions and disabled execution controls
+src/components/toolbar/   File actions and live execution controls
 src/lib/editor/           Document I/O, autosave hook, examples, language
 src/lib/assembler/        ISA metadata, scanner, parser, both passes, and public API
 src/lib/cpu/              Private CPU state, loading/reset, validation, decode, and execution
+src/lib/workspace/        Testable execution controller, marker projection, and React adapter
 src/types/                UI/source types and React-independent engine contracts
 scripts/                  Local Monaco asset preparation
-tests/                    Dependency-free Node tests for documents, assembler, and CPU execution
+tests/                    Dependency-free Node tests for documents, engines, and workspace integration
 ```
 
-UI state stays in React; CPU instances use private local state behind opaque handles and are not connected to the UI. There is no global state library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
+UI state stays in React; the client controller connects a private CPU handle to bounded display projections through an external-store hook. There is no state-management library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
 
 ## Verification and limitations
 
-`npm test` preserves all 168 Day 1–6 tests and adds all instruction effects, signed arithmetic/shifts, memory/stack/control flow, atomic faults, attempt budgets, batch lifecycle, deterministic replay, and complete assembler-to-execution programs. `npm run typecheck` also checks positive/negative contracts, including opaque CPU handles and signed word memory. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` so the existing native Node test runner can import the pure modules without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
+`npm test` preserves all 234 Day 1–7 tests and adds real-engine controller integration, stale-session cancellation, rapid controls, pause/resume, reset, faults/limits, memory/machine-code projections, and marker/source mapping tests. Only scheduling is simulated; assembler/CPU results are real. `npm run typecheck` also checks positive/negative engine contracts. TypeScript imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests without a transpiler dependency. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
 
-Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Complete assembly checks symbols, capacity, operand ranges, and encoding; it does not prove runtime validity. The CPU checks taken targets, memory accesses, SP changes, and decoded bits during internal execution. The UI still displays no engine results because frontend integration is not implemented.
+Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Assembly does not prove runtime validity: the CPU checks taken targets, memory accesses, SP changes, and decoded bits during execution. Runtime state is in memory and is not restored from browser draft storage.
 
-## Day 8 readiness
+## Pausing after Day 8
 
-The tested execution API, bounded batches, snapshots, reset, faults, and cumulative limits are ready for later frontend scheduling/integration. Day 7 stops before any UI execution integration, animations, breakpoint handling, execution traces, debugger, or test-case runner.
+Day 8 stops with live engine integration and bounded visualization. On returning, run the documented checks and complete the pending browser checklist before debugger work. Days 9–11 breakpoints/tracing and Days 12–13 custom testing have not started. No deployment or GitHub operations are part of this work.

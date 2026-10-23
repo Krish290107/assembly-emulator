@@ -1,10 +1,12 @@
 import { CircleDot, Hammer, Pause, Play, RotateCcw, StepForward } from "lucide-react";
-import type { DebuggerState, ExecutionAction } from "@/types/ide";
+import type { ExecutionAction } from "@/types/ide";
+import type { ExecutionSpeed, WorkspaceView } from "@/lib/workspace/controller";
 
 export interface ExecutionToolbarProps {
-  available: false;
-  debuggerState: DebuggerState;
-  onAction?: (action: ExecutionAction) => void;
+  ready: boolean;
+  view: WorkspaceView;
+  onAction: (action: ExecutionAction) => void;
+  onSpeedChange: (speed: ExecutionSpeed) => void;
 }
 
 const ACTIONS = [
@@ -15,16 +17,18 @@ const ACTIONS = [
   { id: "reset", label: "Reset", icon: RotateCcw },
 ] as const;
 
-export function ExecutionToolbar({ debuggerState }: ExecutionToolbarProps) {
+export function ExecutionToolbar({ ready, view, onAction, onSpeedChange }: ExecutionToolbarProps) {
+  const executable = !!view.cpu && ["ready", "paused"].includes(view.cpu.status) && !view.running;
+  const enabled = { assemble: ready, run: ready && executable, step: ready && executable, pause: view.running, reset: ready && view.assembled };
   return (
     <div className="execution-toolbar" aria-label="Execution controls" role="group">
       <div className="execution-actions">
-        {ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} disabled className={`execution-button ${id === "assemble" ? "assemble-button" : ""}`} title={`${label} unavailable — execution engine is not implemented`}><Icon size={14} /><span>{label}</span></button>)}
+        {ACTIONS.map(({ id, label, icon: Icon }) => <button key={id} disabled={!enabled[id]} onClick={() => onAction(id)} className={`execution-button ${id === "assemble" ? "assemble-button" : ""}`} title={enabled[id] ? label : id === "run" || id === "step" ? "Assemble valid source, or reset a terminal program, before execution" : `${label} unavailable in the current state`}><Icon size={14} /><span>{label}</span></button>)}
       </div>
       <div className="debug-controls">
-        <button disabled className="breakpoint-button" title="Breakpoints are not implemented" aria-label={`Breakpoints unavailable; ${debuggerState.breakpoints.length} configured`}><CircleDot size={14} /></button>
-        <label className="speed-control">Speed <select disabled aria-label="Execution speed unavailable"><option>—</option></select></label>
-        <span className="engine-badge">Engine not implemented</span>
+        <button disabled className="breakpoint-button" title="Breakpoints are planned for Days 9–11" aria-label="Breakpoints unavailable"><CircleDot size={14} /></button>
+        <label className="speed-control">Speed <select value={view.speed} onChange={(event) => onSpeedChange(event.target.value as ExecutionSpeed)} aria-label="Execution speed"><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label>
+        <span className="engine-badge">{view.status}</span>
       </div>
     </div>
   );

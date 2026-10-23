@@ -1,4 +1,55 @@
-# Day 7 verification
+# Day 8 verification
+
+Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` using existing **Node 26.2.0 / npm 11.13.0**. The project still targets **Node 24.x**; that runtime is unavailable here, so target-runtime verification remains pending. No runtime or packages were installed/switched.
+
+## Day 8 actual results
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | PASS; zero errors/warnings |
+| `npm run typecheck` | PASS; existing engine/CPU type fixtures preserved |
+| `npm test` | PASS; **262 tests, 0 failures**, all 234 existing tests plus 28 workspace integration tests; none skipped |
+| `npm run build` | PASS; Next.js 16.4.2 compilation, TypeScript, static generation; no build warnings |
+| `npm audit --omit=dev` | PASS; **0 production vulnerabilities** |
+| `git diff --check` | PASS |
+| Local production HTTP | Root, **8 client scripts**, and local Monaco worker all return **200** |
+| Initial server markup | Five execution controls disabled pending client draft restoration; idle/no image state and no current binary |
+| Browser automation | NOT RUN; computer-use discovery returned **no apps or browsers** |
+
+The temporary localhost production verification server was stopped. HTTP/build checks verify served markup/assets, not browser hydration or live interaction. Initial client state matches server output; the browser-only scheduler is invoked only by client actions. No hydration-warning suppression was added.
+
+## Implemented integration
+
+Added `src/lib/workspace/controller.ts`, `markers.ts`, and `use-execution.ts`, plus `tests/workspace.test.mjs`. Updated the existing workspace, execution toolbar, register/memory/results panels, Monaco/editor pane, Info/Test Cases explanatory text, example comments/descriptions, metadata, styles, README, and this record. Added `getCpuOverview` and its compact type to the CPU API; instruction execution, ISA, assembler/parser, loader/reset semantics, dependencies, lockfile, configuration, and all existing tests are unchanged. File handling/autosave/shortcuts remain in their existing modules.
+
+Assemble calls the real assembler and loader without execution. It projects actual word count/bytes/symbol count, signed CPU values, paged machine words, decoded memory bits, and original source lines. Failed assembly clears executable state. Step attempts one instruction; Run resumes a valid ready/paused image through bounded batches; Pause cancels pending callbacks; Reset restores the loaded image and zero attempts without compiling or changing source. Source edits and accepted replacements invalidate CPU/image/diagnostics immediately. Terminal states require reset/reassembly. Empty assembly is valid but not runnable.
+
+One controller owns the authoritative private CPU. Slow/Normal/Fast use maximum batches of **1/64/512** attempts with requested timer delays **200/32/16 ms**. A generation token rejects stale callbacks across edits/replacements, reassembly, reset, pause, speed changes, and unmount. Repeated Run does not schedule duplicates. Running denotes the active scheduling session; the engine pauses between synchronous batches. Pausing before the first callback leaves the CPU ready with zero attempts. Default budget exhaustion stops at exactly 100,000 attempts and appears explicitly in Errors. Output is capped at 20 high-level messages; no instruction trace is stored.
+
+The view contains a detached compact CPU overview (no memory/program arrays), up to **32 memory cells**, and up to **64 disassembly rows**. Reads use checked CPU access. Memory accepts decimal/hex addresses and PC/SP navigation without wrapping. Changed highlights compare visible values with the previous refresh. Disassembly reads current memory, marks modifications, and labels decoded bits separately from original source. Current editor-line mapping is used only while memory matches the original machine word; otherwise it is suppressed. Diagnostics map exact exclusive source spans to Monaco markers, with cleanup on edits/reassembly/model disposal. The plain-text fallback still supports execution and Errors but has no Monaco markers/decorations.
+
+All 28 new tests use the real assembler, loader, and CPU; only browser timing is simulated. They cover assembly success/failure/empty source; actual hex/signed display values; one-attempt Step; Run-to-HALT; pause/resume with exact state preservation; reset of self-modified memory; source invalidation; stale/late callbacks; rapid controls and duplicate-loop prevention; unmount/Strict Mode resubscription; speed invariance; runtime faults/limits; bounded windows/max image; exact source/marker positions; and detached overview/source-map ownership. An initial log-count expectation omitted the welcome entry; it was corrected before the final passing run.
+
+Required controller end-to-end fixtures pass: reference `ldc 10 / adc 5 / HALT` yields **A=15, B=0, PC=2, SP=65,536, attempts=3, halted**; countdown from 3 halts after 12 attempts; stack store/load yields A=42 and memory[65,535]=42 after 6 attempts; call/return yields A=B=7, PC=2 after 4 attempts. The infinite loop yields between callbacks and stops at exactly 100,000 attempts. Invalid assembly produces real source-specific errors and cannot execute. These are automated controller/engine results, not claimed browser interactions.
+
+## Manual browser checks before resuming development
+
+No browser binaries were installed. In the existing browser, verify:
+
+1. Draft restoration and hydration: initial loading state transitions normally; no console mismatch, chunk, Monaco, or worker errors. Assemble becomes available after restoration. Inspect both Monaco and the plain-text fallback.
+2. Enter the reference program, Assemble, inspect exact hex `00000A00 / 00000501 / 00000012`, then Step/Run. Confirm the final reference state above, highlights, attempt count, and terminal button states; Reset restores the image/source stays unchanged.
+3. Run a countdown, stack store/load, and call/return program. Inspect memory by decimal/hex address, PC/SP, Previous/Next, and boundary 65,535; confirm decimal/hex values and changed-cell highlights. Inspect source mapping and paged disassembly, including modified words.
+4. Run `br -1` at Slow/Normal/Fast. Confirm editing, scrolling, dialogs, and Pause remain responsive; pause/resume preserves counts. Test rapid Run/Pause/Reset, source editing/replacement while running, terminal limit at 100,000, and leaving/unmounting the page.
+5. Assemble `ldc missing`, `ldc`, duplicate labels, and an invalid mnemonic; confirm exact Errors positions and Monaco squiggles/hover. Successful assembly/edits clear old markers. Run `ldc 65536 / ldnl 0 / HALT`; verify runtime error mapping and Reset clearing it.
+6. Recheck Create/upload/example replacement acceptance/cancellation, UTF-8/file-size errors, Download/Ctrl+S, guarded Ctrl+N, Monaco undo/find/Tab focus mode, autosave/refresh, keyboard result tabs, separate closeable Info/Test Cases dialogs, focus restoration/Escape, resizing, and desktop/narrow layouts. Test runner buttons and breakpoints must remain disabled; Trace must explicitly say upcoming.
+
+## Pause boundary
+
+Day 8 is complete with browser interaction verification explicitly pending. Runtime state is not persisted; source autosave remains independent. No Day 9 debugger, breakpoint logic, historical tracing, or custom runner was implemented. No packages, runtimes, browser binaries, or frameworks were downloaded/installed; the requested audit fetched advisory metadata only. No commits, pushes, deployments, GitHub/Vercel operations, or work beyond Day 8 occurred. The project is ready to pause with the browser checklist above retained for resumption.
+
+The Day 7 and earlier results below are historical.
+
+## Day 7 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` with existing **Node 26.2.0 / npm 11.13.0**. The available executable remains the existing system Node installation. **Node 24.x is the project target and remains unavailable for verification**; no runtime was downloaded or switched.
 

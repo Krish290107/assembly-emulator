@@ -43,3 +43,6 @@ export interface CpuExecutionResult {
   attemptedInstructions: number;
   diagnostics: readonly RuntimeDiagnostic[];
 }
+
+/** Detached compact state for visualization without copying memory/program bytes. */
+export type CpuOverview = Pick<CpuFoundationSnapshot, "registers" | "status" | "attemptedInstructions" | "limits" | "diagnostics">;

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Assembly Emulator — Editor Workspace",
-  description: "A browser-local assembly source editor with an ISA v1 reference. Assembly and execution are not implemented yet.",
+  description: "A browser-local assembly editor, assembler, and educational CPU emulator with live registers, memory, and ISA v1 documentation.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
