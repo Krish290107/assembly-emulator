@@ -1,6 +1,10 @@
 # Assembly Emulator
 
-Days 1–12 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, Run to Cursor, debugger shortcuts, and bounded execution tracing with filters/navigation/JSON export. A React-independent test-case engine now executes real programs and evaluates assertions. **The browser Test Cases runner is not connected; time travel and watchpoints are not implemented.** [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 12 preserves its semantics.
+Latest stabilization (24 October 2026): **512 tests pass**, preserving the 509-test Day 14 baseline. Lint, typecheck, production build and production audit pass on Node 26.12.1; Node **24.x remains pending**. Drawer section navigation now scrolls only its content, preserving the header/close controls. Native upload/import/status/speed fields have browser-identifiable names. Real Brave verification covered debugger keys/breakpoints, cancellation, persisted custom PASS/FAIL results, a completed JSON export and a 390×844 form/layout check. Native confirmation/file-picker URL verification still blocks full browser acceptance and audit-test cleanup. See the current stabilization record in [VERIFICATION.md](VERIFICATION.md); older day records are historical. Day 15 has not started.
+
+Day 14 reliability audit: **509 tests pass**, with lint/typecheck/build and production audit passing on existing Node 26.12.1. Node **24.x remains the deployment target and has not been executed locally**. No Node 24 CI workflow currently exists. Test expectations/results/diagnostics use 100-item pages to bound rendering for large imported cases. The user reports all ten Day 13 Brave checks passed; Day 14 pagination/accessibility changes still need browser acceptance. See [VERIFICATION.md](VERIFICATION.md) for evidence and the production smoke checklist. Day 15 has not started.
+
+Days 1–13 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, Run to Cursor, debugger shortcuts, and bounded execution tracing with filters/navigation/JSON export. A React-independent test-case engine now executes real programs and evaluates assertions. The Test Cases panel now runs predefined and custom programs with local saving and JSON transfer. Time travel and watchpoints are not implemented. [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 12 preserves its semantics.
 
 ## Stack and setup
 
@@ -36,7 +40,7 @@ Monaco is bundled from ESM source, and its plain-text worker is copied from the 
 - Parser-valid ISA v1 examples: addition, a countdown with forward/backward labels, and a full-width data constant. Existing saved source is preserved; older MOV/HLT drafts are not migrated or deleted.
 - Real CPU registers/status/attempts, bounded memory and machine-code windows, source diagnostics, and high-level execution messages. No fabricated execution data or custom test pass/fail results.
 
-Assemble, Run, Step, Pause, Reset, source breakpoints, and Slow/Normal/Fast speed are connected to the real engines. Planned test actions remain disabled. Memory shows signed decimal and hexadecimal together. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
+Assemble, Run, Step, Pause, Reset, source breakpoints, and Slow/Normal/Fast speed are connected to the real engines. Test Cases actions use the real isolated engine. Memory shows signed decimal and hexadecimal together. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
 
 ## Browser workflow
 
@@ -47,7 +51,7 @@ Assemble, Run, Step, Pause, Reset, source breakpoints, and Slow/Normal/Fast spee
 
 The controller owns one private CPU session. Slow uses 1 attempt/200 ms, Normal 64/32 ms, and Fast 512/16 ms; these are maximum batches and timer delays, not guaranteed instruction rates. Speed remains available in narrow layouts. Every batch yields through a client timer, and pause/reset/reassembly/source changes/unmount invalidate old callbacks. Speed changes scheduling only; CPU semantics and its cumulative 100,000-attempt default budget are unchanged. Initial and Reset speed is Normal. The UI displays Running while scheduled execution is active; the CPU is paused between batches. Pausing before the first batch leaves the unexecuted CPU ready.
 
-Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with browser integration planned for Day 13. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction verification is recorded in `VERIFICATION.md`.
+Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with predefined/custom execution. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction verification is recorded in `VERIFICATION.md`.
 
 ## Debugging
 
@@ -169,7 +173,7 @@ HALT is the default required completion. Explicit negative tests require `expect
 
 Every case assembles into a fresh private CPU. Checked initial memory/register inputs are applied after loading; the debugger and original image remain untouched. Execution uses at most **256 attempts per advance**, with a default **100,000-attempt** cumulative budget and validated limits up to 10,000,000. Async APIs yield between batches/cases and accept an AbortSignal; incremental sessions expose `advance`, `getProgress` and `cancel`. Suites run sequentially in declaration order. Results copy all four registers and only asserted memory cells, without full-memory snapshots per step. Validation, assembly and setup remain synchronous.
 
-The fixtures cover constants, arithmetic/overflow, memory, stack addressing, branching, a countdown loop, call/return, HALT, an expected memory fault, an expected limit, and initial memory. The browser Test Cases actions remain disabled until Day 13 integration; no browser test results are fabricated.
+The fixtures cover constants, arithmetic/overflow, memory, stack addressing, branching, a countdown loop, call/return, HALT, an expected memory fault, an expected limit, and initial memory. The browser panel connects these APIs; direct browser acceptance checks remain pending.
 
 ## Architecture
 
@@ -197,6 +201,6 @@ UI state stays in React; the client controller connects a private CPU handle to 
 
 Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Assembly does not prove runtime validity: the CPU checks taken targets, memory accesses, SP changes, and decoded bits during execution. Runtime state is in memory and is not restored from browser draft storage.
 
-## Pausing after Day 12
+## Pausing after Day 13
 
-Day 12 stops with a reusable, isolated test-case engine and verified fixtures. The API is ready for Day 13 browser integration, which has not started. Test Cases execution buttons remain disabled. Time travel and advanced watchpoints remain unavailable. No deployment or GitHub operations are part of this work.
+Day 13 adds custom management, local persistence and JSON transfer. Automated verification is recorded in VERIFICATION.md; browser and Node 24 checks remain pending. Day 14 has not started. Time travel and advanced watchpoints remain unavailable. No deployment or GitHub operations are part of this work.

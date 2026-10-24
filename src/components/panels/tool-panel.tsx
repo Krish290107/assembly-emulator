@@ -4,8 +4,11 @@ import { useEffect, useRef } from "react";
 import { BookOpen, FlaskConical, X } from "lucide-react";
 import type { ToolPanel } from "@/types/ide";
 import { INSTRUCTIONS } from "@/lib/assembler/isa";
+import { navigatePanelSection } from "@/lib/editor/panel-navigation";
 
+import { TestCasesContent } from "./test-cases-content";
 interface ToolPanelProps {
+  source: string;
   panel: Exclude<ToolPanel, null>;
   onClose: () => void;
 }
@@ -17,7 +20,7 @@ const INFO_SECTIONS = [
 ] as const;
 const TEST_SECTIONS = [["predefined", "Predefined Tests"], ["custom", "Custom Tests"]] as const;
 
-export function ToolPanelView({ panel, onClose }: ToolPanelProps) {
+export function ToolPanelView({ panel, onClose, source }: ToolPanelProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const isInfo = panel === "info";
   const Icon = isInfo ? BookOpen : FlaskConical;
@@ -42,11 +45,10 @@ export function ToolPanelView({ panel, onClose }: ToolPanelProps) {
       <nav className="section-navigation" aria-label={isInfo ? "Documentation sections" : "Test case sections"}>
         {(isInfo ? INFO_SECTIONS : TEST_SECTIONS).map(([id, title]) => <button key={id} onClick={() => {
           const heading = dialog.current?.querySelector<HTMLElement>(`#${panel}-${id}`);
-          heading?.focus({ preventScroll: true });
-          heading?.scrollIntoView({ block: "start" });
+          navigatePanelSection(heading, dialog.current?.querySelector<HTMLElement>(".drawer-content"));
         }}>{title}</button>)}
       </nav>
-      <div className="drawer-content">{isInfo ? <InfoContent /> : <TestCasesContent />}</div>
+      <div className="drawer-content">{isInfo ? <InfoContent /> : <TestCasesContent source={source} />}</div>
       <div className="drawer-footer">ISA v1 REFERENCE <span>Live assembler & CPU</span></div>
     </dialog>
   );
@@ -75,17 +77,6 @@ function InfoContent() {
       <p>Memory shows at most 32 signed/hex words. Jump to decimal or 0x addresses 0–65,535; invalid input is rejected. Program goes to word 0, PC to code, and SP to stack memory (the empty stack shows the last 32 words). Jumping to 65,535 shows the last cell. A changed-value dot remains visible even on the PC row. Errors show codes/source positions plus runtime PC, fetched instruction/word and relevant address, SP, target or shift count where available. Limits report the stopped PC and cumulative attempts without inventing another fetch.</p>
       <p>Go to source navigates without restoring registers or memory. This is history inspection, not time travel. Clear trace removes history without resetting attempts or execution. Reset and reassembly clear history; source edits clear it too. Registers and visible memory changes remain highlighted in the live inspectors.</p>
     </section>
-    <section className="doc-section" aria-labelledby="info-test-cases-guide"><h3 id="info-test-cases-guide" tabIndex={-1}><span>06</span>Test Cases Guide</h3><p>The Day 12 internal engine can execute independent assembly test definitions and compare selected A/B/PC/SP, signed memory words, completion status and attempt count. Definitions include source, ID/name, assertions, optional checked initial-state values and a bounded instruction limit. The browser runner is not connected; its buttons stay disabled until Day 13.</p><p>Default PASS requires HALT and exact matches for all supplied assertions. Expected runtime errors require explicit error status and the exact CPU fault code; limit-reached must also be explicit. Unexpected faults/limits, invalid definitions, assembly/setup failure and cancellation fail. Duplicate assertions/initial memory addresses are rejected. Each case uses a fresh CPU and cannot change the live debugger.</p><p>Fourteen predefined programs are verified internally, including arithmetic, memory/stack access, branching/loops, call/return, HALT, a fault and a bounded loop. Execution advances in batches of at most 256 attempts with cancellation support; final results contain registers, asserted memory cells and individual expected/actual outcomes. This panel does not yet run, save or display those results.</p></section>
-  </>;
-}
-
-function TestCasesContent() {
-  return <>
-    <span className="section-eyebrow">TEST WORKSPACE</span>
-    <h3 className="drawer-title">Built for checking your work.</h3>
-    <p className="drawer-intro">The internal testing engine is implemented. Browser integration is planned for Day 13.</p>
-    <div className="draft-callout"><strong>Browser runner not connected</strong><p>Fourteen fixtures and the reusable engine are verified internally. Run programs with the execution toolbar; this panel does not execute tests or show pass/fail results yet.</p></div>
-    <section className="planned-test" aria-labelledby="tests-predefined"><div><h3 id="tests-predefined" tabIndex={-1}>Predefined Tests</h3><span className="draft-tag">PLANNED UI</span></div><p>Internal fixtures cover constants, arithmetic, memory/stack access, branches, loops, call/return, HALT and explicit fault/limit outcomes.</p><div className="test-empty"><FlaskConical size={23} strokeWidth={1.4} /><span>Browser fixture selection arrives on Day 13</span></div><button className="planned-button" disabled>Run predefined tests</button></section>
-    <section className="planned-test" aria-labelledby="tests-custom"><div><h3 id="tests-custom" tabIndex={-1}>Custom Tests</h3><span className="draft-tag">PLANNED UI</span></div><p>A future workspace for source programs, checked initial register/memory values, and expected-state assertions.</p><p>The internal schema supports A/B signed 32-bit values, PC word addresses 0–65,535, SP values 0–65,536, or signed memory words at addresses 0–65,535. Comparisons use exact equality; unlisted state is ignored. Default completion is HALT. Faults/limits fail unless explicitly expected; expected faults also require the exact CPU code.</p><p>Custom test creation, persistence and browser execution are not integrated yet.</p><button className="planned-button" disabled>Create a custom test</button></section>
+    <section className="doc-section" aria-labelledby="info-test-cases-guide"><h3 id="info-test-cases-guide" tabIndex={-1}><span>06</span>Test Cases Guide</h3><p>Run any of 14 predefined tests or create a custom source snapshot. Enter a unique name and optional register, memory and attempt expectations. Blank registers are ignored; zero is explicit. Memory fields use one address = value per line. Example: ldc 10 / adc 5 / HALT with A=15 and attempts=3 passes.</p><p>HALT is the default completion assertion. Expected errors require the exact CPU fault code; expected limit-reached must be explicit. Unexpected faults, assembly errors and cancellation cannot pass. Expand each Result for exact expected/actual values and diagnostics. Run all executes sequentially; Cancel or closing this panel stops unfinished work. Tests never change your editor or live debugger.</p><p>Edit, Duplicate and confirmed Delete manage custom tests. Saved source is a snapshot; Copy current editor source replaces it explicitly. Budgets default to 100,000, up to 10,000,000, with at most 256 attempts per scheduled batch. Checked initial memory is applied after program loading.</p><p>Definitions save locally; results do not. Export custom tests downloads version 1 JSON. Import accepts UTF-8 JSON up to 2 MiB and 100 tests. Merge renames conflicting IDs/names; Replace requires confirmation. Imports never run automatically. Invalid imports preserve existing tests. Corrupt or newer saved data is protected; export backups before explicitly replacing it. Browser storage can be cleared or fail, and tabs do not synchronize. Closing this panel discards session results and unsaved form edits.</p></section>
   </>;
 }

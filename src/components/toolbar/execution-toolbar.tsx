@@ -32,7 +32,7 @@ export function ExecutionToolbar({ ready, view, onAction, onSpeedChange, onDebug
       </div>
       <div className="debug-controls">
         <button className="breakpoint-button" title="Breakpoints and execution trace; F9 toggles a breakpoint in the source editor" aria-label={`Open debugger; ${view.breakpoints.length} breakpoints configured`} onClick={onDebugger}><CircleDot size={14} /></button>
-        <label className="speed-control">Speed <select value={view.speed} onChange={(event) => onSpeedChange(event.target.value as ExecutionSpeed)} aria-label="Execution speed"><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label>
+        <label className="speed-control">Speed <select name="execution-speed" value={view.speed} onChange={(event) => onSpeedChange(event.target.value as ExecutionSpeed)} aria-label="Execution speed"><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label>
         <span className="engine-badge">{view.status}</span>
       </div>
     </div>

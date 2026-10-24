@@ -37,7 +37,7 @@ export function FileToolbar({ ready, uploading, onUploadingChange, onReplace, on
       <div className="toolbar-group">
         <button className="tool-button" disabled={busy} title="Create a blank program (Ctrl+N)" aria-keyshortcuts="Control+N" onClick={() => onReplace({ code: "", filename: "untitled.asm" })}><FilePlus2 /><span>Create</span></button>
         <button className="tool-button" disabled={busy} onClick={() => input.current?.click()}><Upload /><span>{uploading ? "Reading…" : "Upload"}</span></button>
-        <input ref={input} type="file" accept=".asm,.txt" aria-label="Upload assembly source" className="sr-only" tabIndex={-1} onChange={(event) => {
+        <input name="source-upload" ref={input} type="file" accept=".asm,.txt" aria-label="Upload assembly source" className="sr-only" tabIndex={-1} onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
           void upload(file);

@@ -64,7 +64,7 @@ export function IdeWorkspace() {
         <aside className="inspector" aria-label="CPU and memory inspectors"><div className="inspector-title"><Code2 size={14} /><span>MACHINE STATE</span><span className="inspector-draft">{view.status.toUpperCase()}</span></div><CpuPanel view={view} /><MemoryPanel view={view} onAddress={controller.setMemoryStart} /></aside>
       </main>
       <StatusBar saveState={source.saveState} line={position.line} column={position.column} />
-      {panel && <ToolPanelView key={panel} panel={panel} onClose={() => setPanel(null)} />}
+      {panel && <ToolPanelView source={source.document.code} key={panel} panel={panel} onClose={() => setPanel(null)} />}
     </div>
   );
 }

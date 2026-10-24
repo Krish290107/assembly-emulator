@@ -1,3 +1,150 @@
+# Days 1–14 final stabilization — 24 October 2026
+
+Overall status: **PARTIAL**. Confirmed UI defects were fixed and all local quality gates pass. Real browser acceptance is substantially verified, but native confirmation/file-picker restrictions, cleanup and target-runtime execution remain outstanding. No Day 15 work, CI setup, commits, pushes or deployments were performed.
+
+## Repository baseline and scope
+
+Branch `main`; the Day 13/14 rebuilt implementation was present as six tracked modifications and eight untracked files at the start of this stabilization. No tracked deletions were present. All assembler, CPU, debugger, test engine, Day 13 panel/storage/form and Day 14 pagination files existed. Their uncommitted work was preserved; no Git history/reset/cleanup operations were used. The 509-test baseline was retained.
+
+Current-task created files: `src/lib/editor/panel-navigation.ts`, `tests/panel-navigation.test.mjs`. Modified: `src/app/globals.css`, `src/components/panels/tool-panel.tsx`, `src/components/panels/test-case-form.tsx`, `src/components/toolbar/execution-toolbar.tsx`, `src/components/toolbar/file-toolbar.tsx`, `src/components/panels/test-cases-content.tsx`, `tests/test-panel-render.test.mjs`, README, docs/TESTING.md and this record. No files deleted. Earlier Day 13/14 untracked files remain part of the workspace.
+
+## Confirmed issues and fixes
+
+| File/component | Problem and severity | Minimal fix/evidence |
+| --- | --- | --- |
+| Tool panel navigation/CSS | Medium usability: section scrollIntoView could move ancestors/dialog, hiding the header/close control and making long-result navigation awkward | Focus without scroll, then move only drawer content; prevent dialog overflow and navigation shrink. Repeated Custom section navigation kept header/close visible in Brave. Two focused regressions verify drawer-only movement and missing-node safety. |
+| Native custom-test/import/source/speed controls | Low: Brave DevTools reported form fields without id/name, weakening browser field identification | Add descriptive names to native controls; preserve accessible labels/error associations. Render regression requires all custom form/import fields to have an id or name. Post-fix browser Issues count still needs a clean check. |
+
+No CPU/ISA semantics, source parser, encoding, instruction execution, dependency ranges, package lock, production settings or storage schema were changed. No security vulnerability was confirmed. The apparent disappearance of five browser cases was investigated: the user explicitly confirmed deleting them. It is **not** attributed to application data loss or to this audit. The user's Pagination 101 Test was never edited/deleted by the agent.
+
+## Final automated gates
+
+| Check | Actual result |
+| --- | --- |
+| npm test | **512 passed, 0 failed, 0 skipped**; baseline 509 preserved, three new regressions |
+| npm run lint | PASS, zero warnings/errors |
+| npm run typecheck | PASS |
+| npm run build | PASS; Next.js 16.4.2 compilation/TypeScript/static generation, no build warnings |
+| npm audit --omit=dev | PASS; **0 production vulnerabilities** |
+| git diff --check | PASS |
+| Manifest/lockfile root dependencies, devDependencies and engines | MATCH |
+| Runtime | **Node 26.12.1 / npm 11.20.0** |
+
+Node 24 was not found on PATH or in checked project/common version-manager locations. Node **24.x compatibility is PENDING**, not inferred from Node 26 success. No runtime/package/browser was installed. Advisory metadata was queried for the requested audit. CI setup remains Day 15 work.
+
+## Feature evidence
+
+Automated PASS: parser diagnostics/spans; symbols and both assembler passes; all 19 opcodes; signed 24-bit operands, signed 32-bit wrapping and little-endian serialization; checked memory/SP/PC; branch/call/return; HALT/fault/limit precedence; atomic faults; reset/load; debugger rapid actions, cancellation, self-modification, trace inspection/filter/navigation/export/500-entry retention; memory endpoints; source documents/autosave helpers; all 14 test fixtures; custom assertions/faults/limits/snapshots; storage/schema/quota/corrupt-record recovery; prototype-key/UTF-8/import limits; independent test CPU state; repeated 100-case suites and bounded rendering.
+
+Reviewed rather than fully browser-executed: editor fallback failure handling, upload failure recovery, generated Monaco sanitizer/worker preparation, runtime client/server boundaries, numeric parsing, local-only data flow and safe download cleanup. No runtime eval/unsafe HTML/network transmission of user source/tests was found in the application search. Import data is schema-validated and never evaluated as JavaScript. Fixed/sanitized browser filenames and object URL cleanup remain. No new credential/history audit or browser heap benchmark is claimed. Synchronous validation/assembly/JSON serialization remain bounded by current input limits; traces and displayed memory/results remain bounded.
+
+## Real Brave acceptance record
+
+Tool: existing `node_repl` + `@oai/sky`, Brave at verified `http://localhost:3000/`. Screenshots/accessibility snapshots were captured in the conversation. No browser DOM/console JavaScript was executed to mutate state.
+
+| Browser check | Status | Observed evidence |
+| --- | --- | --- |
+| Pagination 101 | PASS (prior browser run) | One attempt, overall PASS, 103 checks (status + attempts + 101 memory), final page Memory[198]–Memory[200]. Pagination code unchanged during stabilization. |
+| Fault-code validation | PASS (prior browser run) | Missing code prevented save and error was included in accessible selector text; entered fields retained; repaired HALT case passed in one attempt. Error semantics unchanged. |
+| Loop cancellation | PASS for cancellation; follow-up PASS separately | Loop at 10,000,000 budget observed running at 571,904+ attempts, then **Cancelled/paused at 736,000**, zero passes, T006_CANCELLED. Later screenshot retained same stopped count. A separate fresh reference case subsequently ran to PASS. |
+| Debugger | PASS | F10 gave A=10/PC=1/one attempt. F5 halted at A=15, B=0, PC=2, SP=65536, three attempts. Shift+F5 reset to ready/zero attempts. F9 added a line-1 breakpoint; F5 stopped before execution at zero attempts; F9 removed only that audit breakpoint and Resume finished normally. Source already matched reference and was not replaced. |
+| Refresh persistence | PASS | Saved `Days1-14 Stabilization Audit 20261024`, refreshed Brave, reopened panel and observed exact name/description/source/A15/B0/PC2/SP65536/three attempts. Run produced PASS in three attempts. |
+| Stale PASS / real FAIL | PASS | Editing only expected A to 20 changed case to Not run, then execution showed FAIL with expected 20, actual 15; all remaining expectations passed. |
+| JSON export | PASS | Real browser download completed: assembly-emulator-tests.json, 928 bytes. Actual file at D:/New_folder/assembly-emulator-tests.json parsed as format assembly-emulator-tests, version 1, id custom and exact audit definition/expectations. Kept for manual import check. |
+| Native JSON import | UNVERIFIED / MANUAL ACTION REQUIRED | Earlier native picker submission triggered Windows URL-verification failure. No alternate UI/API was used to bypass that restriction; safe Merge/reject-invalid flows remain covered automatically. |
+| Responsive layout | PASS for observed 390×844 editor/panel/create form; pagination/cancel mobile retest UNVERIFIED | DevTools showed width 390 and height 844; panel tabs, header/close, register/memory/status/budget fields, import/export and Save/Cancel were visible/reachable through vertical scrolling. Normal viewport was restored and DevTools closed. No browser performance/contrast certification is implied. |
+| Keyboard/console | PARTIAL | F-keys, keyboard selector use, visible focus and Escape panel close/focus return were observed. Console showed React DevTools/HMR/Fast Refresh messages, no visible application exception/hydration mismatch. Issues panel reported **0 page errors, 0 breaking changes**, four form-field improvements; identifiers fixed in source, but final clean Issues check pending. |
+| Temporary deletion confirmation | UNVERIFIED / BLOCKED | Delete confirmation for the named audit case displayed correctly. Escape dismissal triggered Windows URL-verification failure. No subsequent browser inputs were made. Whether it was dismissed is unknown; deletion was not confirmed. |
+| Production | PENDING | Current Day 14 commit/deployment identity not confirmed. Production was not tested or changed. |
+
+## Cleanup, manual actions and conclusion
+
+The user intentionally deleted the earlier Pagination/Day14 audit collection during this work and confirmed that action. The agent did not delete/replace it or reconstruct it without consent. Only the new `Days1-14 Stabilization Audit 20261024` case was created by this stabilization; it may remain saved with expected A=20. Its deletion confirmation may still be open. After restoring safe browser access, dismiss/complete only this audit-case deletion and preserve all other data. The export file and earlier temporary JSON files remain intact for required manual import checks.
+
+Remaining manual checks: close native confirmations, restore Brave at localhost:3000; verify post-fix Issues after reload; test native Import with **Merge**, inspect conflicts before confirming, then reject malformed JSON without losing good cases; recheck mobile pagination/cancellation; finish audit-case cleanup. If URL verification fails, stop that interaction. Do not use browser scripts, alternate import hooks or security changes to circumvent it. Verify all local gates under an already available Node 24 when possible. After the user commits/deploys Day 14, confirm the deployment identity before the production smoke checklist below is executed.
+
+Implementation through Day 14 is **stable enough for Day 15 preparation: YES, with the listed acceptance/runtime gates still pending**. This is not a fully verified release or a claim of a perfect application. No Day 15 implementation or workflow was started. Historical records follow.
+
+# Day 14 verification — reliability, security and production readiness
+
+Overall readiness: **PARTIAL**. All local quality gates pass; deployment-target Node 24 execution and Day 14 browser acceptance remain outstanding. The user reports all ten Day 13 Brave checks passed. Those are user-provided results, not browser automation performed here. Fresh Day 14 discovery returned no apps or browsers.
+
+## Changes and confirmed fixes
+
+Day 13 changes were already present and uncommitted when this audit began; they were preserved. Day 14 modifies `src/components/panels/test-cases-content.tsx`, `src/components/panels/test-case-form.tsx`, `tests/test-panel-render.test.mjs`, README, docs/TESTING.md and this record, and creates `tests/readiness.test.mjs`.
+
+- A valid definition could render thousands of assertion/expectation/failure DOM rows, even inside closed details. Added 100-item pages for expectations, assertion results, failure reasons and diagnostics. Every recorded result remains accessible; engine semantics and storage are unchanged. A real 1,000-memory-assertion regression verifies 100 rendered result rows while all 1,001 outcomes and 1,000 failures remain intact.
+- Fault/status select errors were not programmatically associated with their controls. Added matching error IDs, aria-describedby and invalid state, preserving existing labels and form behavior.
+
+No CPU/ISA, dependencies, lockfile, runtime settings or deployment configuration changed. No generated worker was manually edited. No installation/download was performed; the requested npm audit queried advisory metadata only.
+
+## Actual quality results
+
+| Gate | Result |
+| --- | --- |
+| npm run lint | PASS, zero warnings/errors |
+| npm run typecheck | PASS |
+| npm test | **509 passed, 0 failed, 0 skipped**; all 504 baseline tests preserved, five new Day 14 checks |
+| npm run build | PASS; Next.js 16.4.2 compilation, TypeScript and static generation; no build warnings |
+| npm audit --omit=dev | PASS, **0 production vulnerabilities** |
+| git diff --check | PASS after whitespace normalization |
+| Local production HTTP smoke | PASS: `/` 200; `/monaco/editor.worker.js` 200; unknown route 404; X-Powered-By absent |
+| Runtime | Node **26.12.1**, npm **11.20.0** |
+
+The loopback-only production server was stopped after checking responses. HTTP/server-render checks do not verify browser hydration, client execution, layout or input delivery.
+
+## Reliability, security and performance evidence
+
+Automated: existing parser/assembler encoding, all 19 CPU instructions, signed boundaries, branch/call, atomic faults, attempt budgets and reset/load tests pass. Debugger rapid actions, breakpoint/Run-to-Cursor cancellation, speed equivalence, disposal, trace filters/navigation/export and 500-attempt retention tests pass. Private test CPU isolation and all 14 predefined fixtures pass. Custom pass/fail/error/limit, snapshots, input memory, storage recovery/quota, JSON roundtrip and stale-run protection remain passing.
+
+New high-risk tests cover maximum-size 100-case suites repeated three times, sequential scheduling and bounded result counts; malicious JSON prototype keys with atomic import rejection and valid-entry storage recovery; invalid UTF-8 and oversized file rejection before reading; definition edits cancelling old callbacks; and large assertion rendering. A focused run measured **51.8 ms** for three 100-case suites using injected immediate timers, 300 callbacks total. This is a local engine/controller measurement, **not browser responsiveness or a memory-leak benchmark**.
+
+Reviewed: application runtime has no eval, dynamic execution of imported JavaScript, unsafe HTML insertion or external user-data transmission. Imported records pass strict allowlists/range validation and owned copies; prototype keys are rejected. React escapes source/names/diagnostics. Browser downloads use fixed/sanitized names and delayed URL revocation; no user-specified filesystem path is used. Source uploads are capped at 1 MiB with fatal UTF-8 decoding; custom libraries at 2 MiB/100 cases with 1 MiB per source. No recorded assertion data is discarded by paging. Local storage is synchronous, browser-local and not cross-tab synchronized; changed/corrupt saved test data is protected from automatic overwrite. No matching tracked secret-key/environment files or generated dependency/build/worker paths were found by the filename scan; this is not a credential-history audit.
+
+Reviewed: debugger memory projection reads at most 32 words and disassembly 64; trace is a fixed 500-entry ring. Runtime/UI projections avoid whole-memory snapshots per attempt. Test execution yields each 256-attempt batch; debugger uses existing bounded speed batches. Validation, assembly, JSON serialization and result evaluation remain synchronous. No browser heap profiling or leak claim is made. Native dialogs, labels, focus containment, editor fallback, scoped shortcuts and responsive rules were reviewed; Day 14 physical keyboard, contrast and narrow-layout behavior have not been independently exercised.
+
+## Node 24 gap and reproducible verification
+
+package.json declares node 24.x; root lockfile dependencies/devDependencies/engines match the manifest. Existing scripts use native Node tests and TypeScript stripping; Next configuration is minimal and runtime code remains client-local. Only Node 26 was found on PATH and in the checked project/common version-manager locations. No `.github` CI workflow exists. Node 26 success does **not** establish Node 24 compatibility.
+
+Recommended minimal future CI: checkout the project, select Node 24 with setup-node, then run `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, and `npm audit --omit=dev`. This is a recommendation, not an executed or remotely installed workflow. Run the same commands locally under an already available Node 24 before release; fresh dependency installation/runtime downloads need the user's approval. No CI or Vercel settings were changed.
+
+## Brave/production smoke checklist for Day 15 preparation
+
+1. On the user's release URL or local production server, verify initial loading/hydration and local Monaco worker without console/network errors. Check desktop and narrow layouts, fallback editor and scroll containment.
+2. Assemble `ldc 10 / adc 5 / HALT` on separate lines. F10 gives A=10/one attempt; F5 finishes A=15, PC=2, three attempts. Shift+F5 resets; F9 breakpoint, Resume, Run to Cursor, Pause, speed changes and source replacement retain their documented cancellation semantics.
+3. Inspect memory 0/65535 and trace row selection/filter/navigation; export trace JSON. After 500+ attempts check retention/discard count and that inspection does not mutate the live CPU.
+4. Run all 14 fixtures: PASS. Create/edit a custom PASS, then A=20 mismatch: FAIL with actual 15. With a large valid imported case, verify Next/Previous expectations/results/failure pages, keyboard activation, and no hidden failing assertion being reported as overall PASS.
+5. Validate a missing expected fault code: error should be associated with the select for assistive technology. Check Tab/Enter/Space, close/Escape and restored focus, storage warnings and announcements without obscured controls.
+6. Cancel/close during a long test suite and rapidly rerun; compare live debugger state before/after. Save/reload definitions, export/import merge/replace and reject malformed JSON. Use a disposable profile for corrupt/quota/unavailable storage recovery. Confirm actual browser downloads, source autosave/file guards and undo/redo.
+
+Ready to proceed with Day 15 preparation once the outstanding checks are accepted; **Day 15 was not started**. No commits, pushes, destructive Git operations, deployments or remote settings changes. Historical records below retain their original evidence.
+
+# Day 13 rebuild verification
+
+Rebuilt from the clean Day 12 baseline on 23 October 2026. Previous Day 13 changes had been removed; earlier reported Day 13 counts are superseded by this rebuild.
+
+Implementation: functional separate Test Cases panel, 14 fixtures, custom create/edit/duplicate/confirmed delete, source snapshots, exact assertions, real results, progress/cancellation, versioned local storage and confirmed JSON merge/replace. Reuses unchanged Day 12 assembler/CPU/testing engine. One private test CPU at a time; at most 256 attempts per scheduled batch. No CPU/ISA semantics changed.
+
+New files: `src/lib/testing/{library,form,panel-controller}.ts`, `src/components/panels/{test-case-form,test-cases-content}.tsx`, `tests/test-panel.test.mjs`, `tests/test-panel-render.test.mjs`. Modified: `src/components/layout/ide-workspace.tsx`, `src/components/panels/tool-panel.tsx`, `src/app/globals.css`, README, testing guide and this record. No packages or runtimes installed; generated Monaco assets use the unchanged build preparation script.
+
+Verified real scenarios: all 14 fixtures PASS; addition returns A=15, B=0, PC=2, SP=65536 and three attempts; expected A=20 correctly FAILS against actual 15. Explicit matching runtime faults pass; unexpected faults/assembly failures fail. Budgeted loops stop, cancellation marks unfinished cases cancelled, late callbacks cannot overwrite a newer run, and disposal cancels timers/notifications. Storage recovery retains valid entries without overwriting damaged data; quota failures preserve in-memory definitions. JSON roundtrips preserve definitions and conflicts rename predictably. An active real debugger snapshot and pending callback remain unchanged after the test suite.
+
+Automated checks: **504 tests passed, 0 failed**, including all 467 baseline tests plus 37 new tests. Lint/typecheck/build PASS; production audit **0 vulnerabilities**. One initial render-test assertion incorrectly expected a React HTML comment; corrected to match visible text. No application result was fabricated. Render tests verify native form submission controls, fixture controls, source escaping and actual expected/actual result markup; they do not verify physical keyboard/pointer delivery.
+
+Runtime: existing Node **26.12.1**, npm **11.20.0**. Node **24.x** deployment-target verification remains pending. Browser discovery in this session returned no apps/browsers. No browser checks are claimed. No commits, pushes, deployments or Day 14 work.
+
+## Brave acceptance checklist
+
+1. Open Test Cases at desktop/mobile widths; check section navigation, Tab/Enter/Space, expanders, scrolling, Escape/close and restored focus.
+2. Run all predefined: 14 PASS, zero failed. Create `ldc 10 / adc 5 / HALT` on separate lines; assert A=15, B=0, PC=2, SP=65536, halted and three attempts. Expect PASS. Edit A to 20: FAIL, actual 15.
+3. Save/refresh/reopen: IDs/order/source survive. Edit the main editor: saved test source stays fixed. Exercise Duplicate, Delete confirmation and explicit source replacement; verify invalid values and duplicate addresses show field errors.
+4. Export and inspect JSON; import with Merge then Replace, checking confirmations/conflict names. Cancel confirmation and import malformed/oversized files: original tests survive. Verify actual download completion.
+5. Run `br -1` with budget 300 and explicit limit-reached: PASS at 300. Start a longer suite, Cancel/close rapidly, reopen: no late execution/results. Compare live debugger registers/memory/breakpoints/trace/attempts before and after tests.
+6. Test unavailable/quota/corrupt storage in a disposable browser profile; valid entries survive and original data stays protected. Recheck Monaco, autosave, source file handling and execution shortcuts outside the dialog.
+
+Status: implementation and automated checks complete; **release acceptance remains unverified** until browser and target-runtime checks pass. Day 14 has not started. Historical Day 12 record follows.
+
 # Day 12 verification
 
 Verified on 23 October 2026 in `C:\Zekrui\assembly-emulator` using existing **Node 26.12.1 / npm 11.20.0**, executable `C:\Program Files\nodejs\node.exe`. Node 24.x was unavailable on PATH and in the previously checked project/version-manager locations. **The Node 24.x deployment target remains unverified.** No runtime was installed or switched.
