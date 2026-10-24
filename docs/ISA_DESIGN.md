@@ -1,6 +1,6 @@
 # Assembly Emulator ISA v1
 
-**ISA finalized for Day 3; assembler completed on Day 5; CPU execution implemented on Day 7.** This is the normative language/CPU profile for this project. Assembly, loading/reset, decoding, and all 19 instruction effects are implemented as internal TypeScript APIs. Frontend execution integration, debugging, trace recording, and test-case execution are not implemented.
+**ISA v1 is finalized.** This is the normative language/CPU profile. Assembly, loading/reset, decoding and all 19 instruction effects are implemented in React-independent TypeScript APIs, connected to the editor/debugger and isolated test-case panel. This document describes architecture and engine contracts; [README.md](../README.md), [TESTING.md](TESTING.md) and [VERIFICATION.md](../VERIFICATION.md) describe current workflows and evidence. Day 15 documentation updates do not change ISA semantics.
 
 ## Machine state and addresses
 
@@ -12,11 +12,11 @@
 
 ### Initial state, loading, reset, and stack
 
-Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted instructions, and status idle, with no loaded program. This state is implemented internally; the UI still shows absent state because CPU integration is not implemented.
+Cold state has A = B = PC = 0, SP = 65,536, zero-filled memory, zero attempted instructions, and status idle, with no loaded program. The UI deliberately shows absent state before assembly rather than presenting an unassembled CPU as runnable.
 
 A successful image loads at word address 0, replacing memory after zero-fill. There is no origin directive; `MachineCode.origin` is 0 in ISA v1. Every instruction and data directive occupies one word; a label-only line occupies none. An image must fit in memory. A zero-word image is not runnable and remains idle; a nonempty loaded image is ready.
 
-Reset restores the initial registers, zero-fills memory, reloads the last successfully loaded image (if any), and clears the attempt counter, trace, program output, and runtime diagnostics. It returns to ready for a nonempty image, otherwise idle. The CPU API implements register/memory/image/counter reset and clears diagnostics and the reserved empty trace collection; output generation and trace recording do not exist. Source, configured breakpoints, speed, and test definitions remain outside this API and are retained by their future owners. Loaded source mappings and the configured execution limit are preserved.
+Reset restores initial registers, zero-fills memory, reloads the last successfully loaded image (if any) and clears attempts/runtime diagnostics. It returns to ready for a nonempty image, otherwise idle. The CPU API's legacy trace collection remains empty; the workspace separately clears its real trace/cursor goals and publishes a reset event in its bounded output log. Source, permanent breakpoint definitions and custom tests are retained by their owners; workspace Reset restores Normal speed. Loaded source mappings and the configured CPU limit are preserved. There is no CPU stdin/stdout facility.
 
 The stack grows downward by convention: `adj -n` reserves n words; `adj n` releases them. Memory-stack allocation/push/pop is never implicit: only adj/a2sp change SP, while all A/B effects still follow the instruction table. SP movement outside 0–65,536 faults; overlapping code/data or accessing an unallocated but in-range word does not. `call` does not use memory or SP. Nested calls must explicitly save return links in memory and later restore them to A before `return`.
 
@@ -69,7 +69,7 @@ A label denotes the word address of the next emitted instruction/data word. Mnem
 
 Duplicate labels (same exact spelling), undefined symbols, symbols outside memory, image overflow, and resolved operands outside signed 24 bits are assembler errors. A trailing label may point beyond the emitted image, provided its address is still within memory. The parser deliberately does not perform these semantic checks or allocate any addresses.
 
-Numeric branch/call operands within signed 24 bits remain legal assembly even when their computed target would be outside memory; the future CPU faults only if that target is taken. Memory access and SP validity likewise remain runtime checks. A loader does not infer code/data regions or reject words merely because they would be invalid instructions when fetched.
+Numeric branch/call operands within signed 24 bits remain legal assembly even when their computed target would be outside memory; the CPU faults only if that target is taken. Memory access and SP validity likewise remain runtime checks. A loader does not infer code/data regions or reject words merely because they would be invalid instructions when fetched.
 
 ## Source syntax
 
@@ -124,7 +124,7 @@ One blocking diagnostic is returned per malformed line, in source order. That en
 
 ## First assembler pass (Day 4)
 
-`firstPass(parseSource(source))` in `src/lib/assembler/first-pass.ts` consumes the parser result without rescanning text or changing its statements. It returns `FirstPassResult`: `ok`, `symbols`, `statements`, `wordCount`, `diagnostics`, and `unresolvedReferences`. It is independent of React and is not connected to the UI.
+`firstPass(parseSource(source))` in `src/lib/assembler/first-pass.ts` consumes the parser result without rescanning text or changing its statements. It returns `FirstPassResult`: `ok`, `symbols`, `statements`, `wordCount`, `diagnostics`, and `unresolvedReferences`. It is independent of React and is used by the full assembler invoked by the UI.
 
 - The location counter starts at word 0. Each parsed instruction and numeric `data` directive consumes exactly one word. Label-only statements, comments, and blank lines consume none. Invalid lines were omitted by the parser and contribute neither words nor labels; later valid lines are allocated consecutively without gaps. Any parser error still makes the first pass fail.
 - `symbols` is a case-sensitive `ReadonlyMap<string, SymbolDefinition>`, in first-definition order. Each entry preserves the label's spelling and exclusive source range and records its word address. A label on an emitting line names that word. Consecutive distinct label-only lines may alias the same address.
@@ -153,7 +153,7 @@ Operand-free instructions encode a zero operand. The separate numeric `data` dir
 
 Only after all checks pass does serialization allocate a `Uint8Array`, write each signed 32-bit word through `DataView.setInt32(byteOffset, word, true)`, and expose the image. A successful result is `{ status: "success", program, symbols, diagnostics }`: `program.origin` is 0, `program.bytes.length` is `wordCount * 4`, and `symbols` is a fresh map of the collected definitions. Every emitted instruction/data word has one source-map entry `{ offset, length: 4, source }`; offsets count **bytes**, and source is the original full statement range, including any inline label but excluding indentation/comments. Label-only lines have no entry. Source ranges and symbol definitions retain their existing values; the AST and unresolved-reference list remain unchanged.
 
-A failure is `{ status: "failure", diagnostics }` with **no `program` or `symbols` properties**. Neither an earlier-stage error nor a second-pass error can expose a successful partial binary. Diagnostics retain phase order; second-pass errors follow in statement order, with any final word-count inconsistency last. Earlier warnings/info can survive a successful result. An empty/comment-only/label-only source may assemble to zero bytes and an empty source map; it is still not runnable. Data-only images may assemble without HALT or instruction validation; deciding what occurs when fetched belongs to the future CPU.
+A failure is `{ status: "failure", diagnostics }` with **no `program` or `symbols` properties**. Neither an earlier-stage error nor a second-pass error can expose a successful partial binary. Diagnostics retain phase order; second-pass errors follow in statement order, with any final word-count inconsistency last. Earlier warnings/info can survive a successful result. An empty/comment-only/label-only source may assemble to zero bytes and an empty source map; it is still not runnable. Data-only images may assemble without HALT or instruction validation; deciding what occurs when fetched belongs to the CPU.
 
 | Diagnostic | Meaning |
 | --- | --- |
@@ -192,9 +192,9 @@ End columns above are exclusive. Source-map byte offsets are 0, 4, and 8. `br -1
 | `fetchInstruction(cpu, address?): CpuResult<DecodedInstruction>` | Reads at PC by default, or at an explicit word address, and decodes without executing or changing PC/count/status |
 | `readMemory(cpu, address)` / `writeMemory(cpu, address, value)` | Checked word access, returning a `CpuResult` with the value or `undefined` on successful write |
 | `writeRegister(cpu, name, value)` | Checked A/B/PC/SP setup; does not execute an instruction |
-| `setExecutionLimit(cpu, maxInstructions)` | Validates/stores a future cumulative attempt limit; does not count or execute attempts |
+| `setExecutionLimit(cpu, maxInstructions)` | Validates/stores the cumulative attempt limit; does not count or execute attempts |
 
-`CpuResult<T>` is `{ ok: true, value: T }` or `{ ok: false, diagnostic: RuntimeDiagnostic }`. Failed operations have no value. These image/setup/fetch/decode operations return diagnostics without mutating the CPU on failure or appending runtime state. Inspection alone never executes HALT, changes status, or counts attempts. Execution operations below return a separate lightweight summary and record runtime faults. Trace recording remains unimplemented. Passing a forged/foreign CPU handle is a programming error and throws `TypeError`.
+`CpuResult<T>` is `{ ok: true, value: T }` or `{ ok: false, diagnostic: RuntimeDiagnostic }`. Failed operations have no value. These image/setup/fetch/decode operations return diagnostics without mutating the CPU on failure or appending runtime state. Inspection alone never executes HALT, changes status, or counts attempts. Execution operations below return a separate lightweight summary and record runtime faults; `stepCpuTraced` additionally returns the actual attempt entry. Passing a forged/foreign CPU handle is a programming error and throws `TypeError`.
 
 ### Loading, ownership, and reset
 
@@ -218,7 +218,7 @@ Foundation diagnostic codes are C001_INVALID_WORD, C002_INVALID_OPCODE, C003_INV
 
 Results contain `{ status, attempts, attemptedInstructions, diagnostics }`: actual CPU status, attempts in this call, cumulative attempts, and detached runtime diagnostics. Ordinary completion pauses before the next instruction. Ready/paused CPUs enter running while synchronous work is performed, then return paused or terminal. Idle CPUs and terminal halted/error/limit-reached CPUs are unchanged by execution calls and return zero new attempts. Cold/empty memory is inspectable but cannot execute until a nonempty image is loaded.
 
-`maxSteps` must be an integer 1–10,000,000; batches stop at that bound or earlier on HALT/fault/CPU budget. Invalid bounds return C015_INVALID_BATCH_SIZE in the result without changing CPU state/count/diagnostic storage; result status remains the actual CPU status, so callers must inspect diagnostics too. There are no scheduling callbacks, asynchronous timers, animations, breakpoints, or traces. Browser scheduling remains Day 8 work.
+`maxSteps` must be an integer 1–10,000,000; batches stop at that bound or earlier on HALT/fault/CPU budget. Invalid bounds return C015_INVALID_BATCH_SIZE in the result without changing CPU state/count/diagnostic storage; result status remains the actual CPU status, so callers must inspect diagnostics too. These synchronous batch calls do not schedule browser work or check breakpoints. The workspace controller schedules bounded work and checks breakpoints before each traced attempt.
 
 | Execution diagnostic | Meaning |
 | --- | --- |
@@ -227,7 +227,7 @@ Results contain `{ status, attempts, attemptedInstructions, diagnostics }`: actu
 | C014_INVALID_TARGET | Candidate next PC is outside 0–65,535, including fallthrough |
 | C015_INVALID_BATCH_SIZE | Invalid caller batch configuration; no instruction attempted |
 
-Existing C002/C003 decode faults and C004/C005 PC/access faults are reused. Runtime faults set error and append one source-associated diagnostic, preserving all instruction registers and memory. No trace entry is recorded. The only ways to clear attempts and restore execution eligibility are reset or successful load.
+Existing C002/C003 decode faults and C004/C005 PC/access faults are reused. Runtime faults set error and append one source-associated diagnostic, preserving all instruction registers and memory. Plain stepCpu/runCpuBatch calls do not collect trace entries; stepCpuTraced returns the real compact attempt entry for the workspace. The only ways to clear attempts and restore execution eligibility are reset or successful load.
 
 ### HALT, faults, and execution limits
 
@@ -236,18 +236,18 @@ Instruction attempts follow this implemented order:
 1. Check the cumulative attempt budget before fetching. If exhausted, stop with status limit-reached without another fetch, attempt, or register/memory mutation.
 2. Increment the attempt count, validate PC, fetch/decode, then validate opcode and zero payload for operand-free instructions.
 3. Validate a shift count if relevant, then any memory address / candidate SP, then the candidate next PC (except HALT, which retains p).
-4. Commit all effects simultaneously, or fault atomically: status error, a structured diagnostic, unchanged registers and memory, and PC still at the faulting instruction. The attempt count/status/diagnostic are bookkeeping, not rolled back. If a nonterminal commit uses the last permitted attempt, stop with limit-reached after that commit; HALT/fault take precedence if they occur on the final allowed attempt. A future tracing layer may record these events; none is implemented today.
+4. Commit all effects simultaneously, or fault atomically: status error, a structured diagnostic, unchanged registers and memory, and PC still at the faulting instruction. The attempt count/status/diagnostic are bookkeeping, not rolled back. If a nonterminal commit uses the last permitted attempt, stop with limit-reached after that commit; HALT/fault take precedence if they occur on the final allowed attempt. The shared traced execution path records actual attempts, including faults and HALT, without adding attempts for budget checks.
 
 Invalid opcode 19–255, invalid operand-free encoding, invalid fetch/access/PC/SP, and invalid shift counts fault. Address computations never wrap to an apparently valid address. HALT is successful termination and counts as one attempt; faults, including failed fetches, also count. HALT at word 65,535 succeeds; a non-HALT fallthrough to 65,536 faults before any effects commit. There are no implicit traps for stack/code overlap, division, flags, or I/O because those mechanisms do not exist.
 
 Default budget: **100,000 attempts**; caller-configured budget: integer **1–10,000,000**, otherwise reject configuration before starting. Pause/resume and Step share the same cumulative budget; they cannot bypass the limit. Reset/new image starts a fresh count. A single successful Step pauses before the next instruction unless it halts, faults, or reaches the limit; Run continues until a stop condition. Terminal halted/error/limit-reached states require reset or a new image before restarting.
 
-The tested program `ldc 10`, `adc 5`, `HALT` terminates with A=15, B=0, PC=2, SP=65,536, three attempts, status halted. A countdown from 3 uses 12 attempts; a descending-stack store/load preserves memory[65,535]=42 and restores SP. These are internal automated execution fixtures; the browser UI remains disconnected.
+The tested program `ldc 10`, `adc 5`, `HALT` terminates with A=15, B=0, PC=2, SP=65,536, three attempts, status halted. A countdown from 3 uses 12 attempts; a descending-stack store/load preserves memory[65,535]=42 and restores SP. These expectations are covered by real-engine tests and the browser uses the same execution APIs.
 
-Day 12's internal test-case engine starts from a fresh loaded CPU plus validated optional initial-state inputs, then runs under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP inputs/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate initial memory addresses or assertions on the same target are invalid definitions. Default PASS requires normal HALT and matching assertions; an explicit error status plus exact CPU fault code, or explicit limit-reached status, can instead define a negative test. Invalid setup, assembly failure, cancellation or no runnable image always fails. Bounded execution/cancellation and the complete schema are specified in [TESTING.md](TESTING.md). Browser test-case integration is not implemented until Day 13; earlier implementation-status notes in this ISA document describe their historical engine milestones.
+Day 12's internal test-case engine starts from a fresh loaded CPU plus validated optional initial-state inputs, then runs under the same budget. Assertions compare selected registers/memory cells by exact integer equality; unlisted state is ignored. PC/SP inputs/assertions use their address/pointer ranges, A/B and memory use signed 32-bit values. Duplicate initial memory addresses or assertions on the same target are invalid definitions. Default PASS requires normal HALT and matching assertions; an explicit error status plus exact CPU fault code, or explicit limit-reached status, can instead define a negative test. Invalid setup, assembly failure, cancellation or no runnable image always fails. Bounded execution/cancellation and the complete schema are specified in [TESTING.md](TESTING.md). The Test Cases panel connects this engine with private sessions and leaves the live debugger independent.
 
-## Day 8 boundary
+## Current integration boundary
 
-`src/lib/assembler/isa.ts` holds unchanged instruction metadata and architectural constants. The scanner/parser, both assembler passes, and CPU execution use React-independent contracts. The UI's Assemble/Run/Step and other engine actions remain disabled; these modules are not wired to live editor diagnostics or CPU panels.
+`src/lib/assembler/isa.ts` holds instruction metadata and architectural constants. The scanner/parser, both assembler passes and CPU use React-independent contracts. The workspace controller connects assembly, source diagnostics, checked CPU projections, debugger controls and bounded scheduling to the editor. Breakpoints stop before execution; tracing records actual attempts. Historical inspection does not rewind CPU state.
 
-Day 7 stops at internal instruction execution, structured atomic faults, cumulative attempt limits, and synchronous bounded batches. Frontend scheduling/integration, debugger, breakpoints, trace recording, and test-case execution remain future work. The assembler itself still produces no CPU state or execution result.
+Custom tests run fresh private CPUs through the same assembler/execution APIs. Definitions/results and local persistence are specified in TESTING.md. The assembler itself produces no CPU state or execution result. Release/Node 24/browser evidence remains explicitly scoped in VERIFICATION.md.

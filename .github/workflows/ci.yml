@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Node 24 verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          clean: false
+      - name: Set up Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          package-manager-cache: false
+      - name: Print runtime versions
+        run: |
+          node --version
+          npm --version
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Production dependency audit
+        run: npm audit --omit=dev

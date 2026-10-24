@@ -1,14 +1,14 @@
-# Test-case engine (Day 12)
+# Test-case engine and management
 
 Stabilization, 24 October 2026: section navigation keeps the dialog header/close controls fixed and moves only the drawer content. Real Brave refresh restored an audit definition with exact name, source, description and A/B/PC/SP/attempt expectations; it passed with actual A=15 and three attempts, then correctly failed after expected A changed to 20. Editing removed its stale PASS. A real export completed and its 928-byte version 1 JSON was inspected. These observations do not establish native file-picker import acceptance: Windows URL verification blocked that interaction. Use Merge, inspect the confirmation and preserve existing tests during the remaining manual import check. The audit-created temporary test/export is identified in VERIFICATION.md; no browser storage was changed through scripts.
 
 Day 14: expectations, assertion results, failure reasons and diagnostics display at most **100 items per page** with Previous/Next controls. All original outcomes remain stored; paging does not rerun tests or alter the live CPU. A large test can fail even when the current page contains only passing assertions; the overall result and failure-reason pages retain those failures. This limits DOM work, not the definition's existing assertion allowance. Validation/assembly remain synchronous within the existing input limits.
 
-The React-independent engine is in `src/lib/testing/`. It uses the existing assembler, private CPU handles, checked setup/read APIs and bounded CPU batches. The Day 13 browser panel connects the engine; physical browser acceptance remains pending. Definitions and results are JSON data, with no stdin/stdout, callbacks, live-workspace handle or custom instruction semantics.
+The React-independent engine is in `src/lib/testing/`. It uses the existing assembler, private CPU handles, checked setup/read APIs and bounded CPU batches. The Test Cases panel connects the engine. Earlier browser evidence and remaining manual acceptance checks are recorded in VERIFICATION.md; fresh Day 15 browser acceptance is unverified. Definitions and results are JSON data, with no stdin/stdout, callbacks, live-workspace handle or custom instruction semantics.
 
 ## Definition format
 
-`TestDefinition` in `src/types/testing.ts` extends the existing `TestCase` contract. Each definition includes its own source; a future UI can insert the editor source into a selected definition before running it.
+`TestDefinition` in `src/types/testing.ts` extends the existing `TestCase` contract. Each definition includes its own source. The UI copies editor source into a snapshot on Create and replaces that snapshot only on explicit request.
 
 ```ts
 import type { TestDefinition } from "../src/types/testing.ts";
@@ -69,7 +69,7 @@ const completed = await pending;
 
 The async APIs execute **at most 256 attempts per advance**, yielding with `setTimeout(0)` between unfinished batches and suite members. A suite starts at most one CPU at a time and preserves declaration order. Each case has its own source/image, initial memory, registers, budget and diagnostics. Separate explicitly started sessions are independent; their scheduling is the caller's responsibility. No testing API takes a debugger/workspace CPU.
 
-For a future scheduler, `createTestExecution(definition)` and `createTestSuiteExecution(definitions)` provide `advance()`, `getProgress()` and `cancel(reason?)`. Creating a session captures/validates data but does not assemble or allocate a CPU. Call `advance()` from a timer/animation/worker scheduling boundary; do not drain it in a browser `while` loop. A suite advance processes at most one case/batch. Progress includes completion/count/status or current suite ID; final results are detached. CPU memory is released when each case finishes or cancels. No per-instruction memory snapshots or traces are collected.
+For host scheduling, `createTestExecution(definition)` and `createTestSuiteExecution(definitions)` provide `advance()`, `getProgress()` and `cancel(reason?)`. Creating a session captures/validates data but does not assemble or allocate a CPU. Call `advance()` from a timer/animation/worker scheduling boundary; do not drain it in a browser `while` loop. A suite advance processes at most one case/batch. Progress includes completion/count/status or current suite ID; final results are detached. CPU memory is released when each case finishes or cancels. No per-instruction memory snapshots or traces are collected.
 
 Cancellation before the first advance assembles/executes nothing. After a batch, cancellation retains the actual partial final state, marks assertions SKIPPED, and forces FAIL. Abort signals also release an async wait on a custom scheduler; late scheduler resolution cannot resume a cancelled test. Completed results are final: subsequent advance/cancel calls return the same values, so completion wins over an abort that arrives afterward. Suite cancellation preserves completed results and reports remaining cases as failed/cancelled; invalid cases keep their validation failures. Scheduler rejection becomes cancellation/FAIL.
 
@@ -136,4 +136,4 @@ Storage/export format: `{ "format": "assembly-emulator-tests", "version": 1, "te
 
 Export requests `assembly-emulator-tests.json`. Import validates UTF-8 JSON and the entire schema before confirmation. Merge preserves existing cases and deterministically renames conflicting IDs/names; Replace replaces custom definitions. Internal duplicate IDs/names reject the file. Invalid imports preserve current tests and imports never execute automatically. Fixtures remain separate.
 
-Validation, assembly and rendering are synchronous; CPU execution yields. Browser interactions and Node 24 verification remain pending (see VERIFICATION.md). No stdin/stdout, time travel, external storage or Day 14 work is included.
+Validation, assembly and rendering are synchronous; CPU execution yields. Node 24 CI and same-commit production acceptance remain pending; native import and some accessibility checks still need manual verification. No stdin/stdout, time travel or external storage is included. Current release gates and manual acceptance steps are in VERIFICATION.md and RELEASE.md.

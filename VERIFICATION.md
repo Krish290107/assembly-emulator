@@ -1,3 +1,60 @@
+# Day 15 final release preparation — 24 October 2026
+
+Overall status: **PARTIAL verification; local preparation PASS / READY TO PUSH**. This is not a published or production-verified release. Node 24 GitHub CI and same-commit production acceptance are **PENDING**. Fresh Day 15 browser acceptance is **UNVERIFIED**. Historical records below describe earlier checks and are not evidence of a new CI/deployment/browser run.
+
+## Repository and changes
+
+Started on clean `main` at `bc020bf` (`Day 14: Stabilize assembler debugger and test runner`). All Day 13/14 source, tests and fixes were present. Added `.github/workflows/ci.yml` and `docs/RELEASE.md`; modified README.md, docs/ISA_DESIGN.md, docs/TESTING.md and this record. No files deleted. No application, ISA, tests, dependency, lockfile, runtime or Vercel configuration changes were needed. No confirmed application regression was found.
+
+README now describes architecture, installation, all 19 opcodes, debugger controls, local data, test management and four practical demos. ISA/testing documentation removes obsolete statements that the CPU, tracing or test UI is not implemented; instruction semantics and API contracts are unchanged. The existing Info panel was reviewed and already matches the implemented ISA/debugger/test workflow; no source edit was needed. Relative Markdown file links and whitespace across all six changed files were checked. The [manual release procedure](docs/RELEASE.md) provides exact PowerShell review/stage/commit/push instructions for the owner, followed by CI, deployment SHA and production checks. None of those write/remote release operations was executed by the agent.
+
+## Actual quality gates
+
+| Check | Day 15 result |
+| --- | --- |
+| npm run lint | **PASS**, no warnings/errors |
+| npm run typecheck | **PASS** |
+| npm test | **512 passed, 0 failed, 0 skipped**; all 512 baseline tests preserved, **0 new tests** |
+| npm run build | **PASS**, Next.js 16.4.2 compilation, TypeScript and static generation; no build warnings |
+| npm audit --omit=dev | **PASS**, **0 production vulnerabilities** reported by the current advisory query |
+| git diff --check | **PASS** |
+| Manifest/lockfile root dependencies, devDependencies and engines | **MATCH** |
+| Workflow YAML and required configuration | **PASS**, parsed using the already installed YAML parser; this is not an Actions execution |
+| Local runtime | **Node 26.12.1 / npm 11.20.0** |
+| Target Node 24 execution | **PENDING**, Node 24 unavailable in checked PATH/project/common version-manager locations |
+
+No local runtime, package or browser installation/download was performed. The requested production audit queried advisory metadata; its result covers production dependencies, not every development dependency or all application security risks. No npm audit fix or dependency upgrade was run.
+
+## CI prepared, not executed
+
+The workflow uses `ubuntu-latest`, `actions/checkout@v7`, `actions/setup-node@v7`, Node `24.x`, a 20-minute timeout and `contents: read`. It runs on pushes to main and pull requests targeting main. Steps print versions, install the lockfile with npm ci, lint, typecheck, test, build and audit production dependencies. Credential persistence, checkout cleanup and automatic package caching are disabled. No deployment/release step, custom secret or private environment variable is required.
+
+Official [checkout v7](https://github.com/actions/checkout/tree/v7) and [setup-node v7](https://github.com/actions/setup-node/tree/v7) documentation/action definitions were checked: both use the Node 24 action runtime; compatible runner support is required (minimum 2.327.1 documented for Node 24 actions). GitHub-hosted Ubuntu manages its runner. After the owner pushes, actions, Node and locked dependencies may be downloaded onto GitHub-hosted runners. These remote downloads are separate from local Windows downloads; preparing the workflow installs nothing locally. **A real successful Node 24 run for the final commit remains required.**
+
+## Feature, security and reliability evidence
+
+All existing tests pass for parser diagnostics, both assembler passes, labels, all 19 opcodes, signed 24-bit operands, signed 32-bit arithmetic, little-endian serialization, branch/call addressing, memory/SP/PC checks, reset/loading, HALT, attempted-instruction counts, atomic faults and execution budgets. Existing editor/debugger/controller tests preserve breakpoints, Run to Cursor, speed equivalence, cancellation/disposal, self-modification, trace selection/navigation/export and bounded 500-entry retention. Test engine/panel tests preserve isolated CPUs, saved snapshots, custom CRUD, exact assertions, expected faults/limits, persistence, import/export and 100-item pagination.
+
+Additional real-engine/controller checks verified README demos without adding redundant permanent tests: basic execution ends at A=15, B=0, PC=2, SP=65536, three attempts; memory demo stores 42 at word 100 in four attempts. All 14 predefined fixtures passed. The real workspace controller stopped before the line-2 breakpoint at one attempt, resumed to HALT at three, and stopped Run to Cursor before HALT at two before Step completed it. These are **engine/controller checks, not browser interaction claims**.
+
+Reviewed safeguards remain covered by the existing tests: bounded uploads/imports with fatal UTF-8 validation, strict integer/schema/duplicate/prototype-key checks, corrupt-storage recovery, owned CPU inputs, safe filenames/object URL cleanup, bounded execution/trace/views and cancellation tokens. No runtime eval, unsafe HTML rendering or external transmission of user source/test data was found in the application search. Filename/tracked-file checks found no tracked dependency/build/worker output or matching environment/key files; this is not a credential-history audit. Manifest and lockfile agree. Existing ignores protect dependencies, build output, environment files, logs, caches and OS junk. Generated Monaco assets/licenses are required ignored build inputs and were preserved; no speculative cleanup was performed.
+
+## Browser and release acceptance
+
+| Check | Status and actual evidence |
+| --- | --- |
+| Fresh local Day 15 browser acceptance | **UNVERIFIED**. Existing node_repl + @oai/sky identified Brave windows and the Assembly Emulator tab. Selecting that tab failed twice with `coordinate input geometry is unavailable`, including after refreshing the window binding. Stopped retries; no fresh application screenshot or application interaction was obtained. |
+| Earlier local Brave checks | Historical PASS/PARTIAL evidence is retained in the Days 1–14 record below; it is not a new Day 15 browser pass. |
+| Native JSON import | **UNVERIFIED / MANUAL ACTION REQUIRED**. Earlier Windows URL-verification restriction remains unresolved; no native picker or alternative bypass was used in Day 15. |
+| Remaining keyboard/accessibility/console checks | **UNVERIFIED** for fresh Day 15 execution. Recheck post-fix Issues, confirmations/focus, mobile pagination/cancellation and the smoke checklist manually. |
+| Production acceptance | **PENDING** until CI passes and the Vercel Ready deployment's full Git SHA matches the owner's release commit. No production verification or deployment was performed. |
+
+Browser-local data and existing JSON files were not changed during Day 15. The earlier audit-case cleanup state was not re-established; inspect and remove only audit-created data if still present, preserving user cases/exports. Restore supported browser input geometry before retrying automation. If a native picker/confirmation triggers URL verification, stop that interaction and complete it manually without bypassing browser security.
+
+Follow [docs/RELEASE.md](docs/RELEASE.md): review/stage the six intended files, commit/push main manually, require the exact commit's Node 24 CI success, then confirm Vercel Ready/SHA and perform the production smoke checks. **READY TO PUSH does not mean release acceptance is complete.** No commit, push, deploy, tag, publication, destructive Git operation or further development phase was performed.
+
+---
+
 # Days 1–14 final stabilization — 24 October 2026
 
 Overall status: **PARTIAL**. Confirmed UI defects were fixed and all local quality gates pass. Real browser acceptance is substantially verified, but native confirmation/file-picker restrictions, cleanup and target-runtime execution remain outstanding. No Day 15 work, CI setup, commits, pushes or deployments were performed.

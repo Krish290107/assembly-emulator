@@ -1,206 +1,181 @@
 # Assembly Emulator
 
-Latest stabilization (24 October 2026): **512 tests pass**, preserving the 509-test Day 14 baseline. Lint, typecheck, production build and production audit pass on Node 26.12.1; Node **24.x remains pending**. Drawer section navigation now scrolls only its content, preserving the header/close controls. Native upload/import/status/speed fields have browser-identifiable names. Real Brave verification covered debugger keys/breakpoints, cancellation, persisted custom PASS/FAIL results, a completed JSON export and a 390×844 form/layout check. Native confirmation/file-picker URL verification still blocks full browser acceptance and audit-test cleanup. See the current stabilization record in [VERIFICATION.md](VERIFICATION.md); older day records are historical. Day 15 has not started.
+A browser-local assembly IDE for learning how source code becomes machine instructions and changes CPU state. Write programs for a documented educational CPU, assemble them, debug execution and check results with isolated test cases.
 
-Day 14 reliability audit: **509 tests pass**, with lint/typecheck/build and production audit passing on existing Node 26.12.1. Node **24.x remains the deployment target and has not been executed locally**. No Node 24 CI workflow currently exists. Test expectations/results/diagnostics use 100-item pages to bound rendering for large imported cases. The user reports all ten Day 13 Brave checks passed; Day 14 pagination/accessibility changes still need browser acceptance. See [VERIFICATION.md](VERIFICATION.md) for evidence and the production smoke checklist. Day 15 has not started.
+[Live application](https://assembly-emulator.vercel.app) · [Repository](https://github.com/Krish290107/assembly-emulator) · [ISA reference](docs/ISA_DESIGN.md) · [Testing API/schema](docs/TESTING.md) · [Verification evidence](VERIFICATION.md)
 
-Days 1–13 of a 15-day project: a browser-local assembly workspace with a finalized 19-instruction ISA, complete two-pass assembler, live CPU execution, source breakpoints, Run to Cursor, debugger shortcuts, and bounded execution tracing with filters/navigation/JSON export. A React-independent test-case engine now executes real programs and evaluates assertions. The Test Cases panel now runs predefined and custom programs with local saving and JSON transfer. Time travel and watchpoints are not implemented. [ISA_DESIGN.md](docs/ISA_DESIGN.md) remains the authoritative architecture and engine reference; Day 12 preserves its semantics.
+Day 15 prepares the project and Node 24 CI for release. **Node 24 CI and the production deployment matching this revision remain PENDING.** A live URL does not establish which local changes are deployed. See the [manual release procedure](docs/RELEASE.md).
 
-## Stack and setup
+## Features
 
-Next.js App Router, React, TypeScript, Tailwind CSS, Monaco (`@monaco-editor/react`), Lucide, ESLint, and npm. Use Node.js **24.x** and npm 10+; the native test runner uses Node's built-in TypeScript stripping. The bounded Node engine selects Vercel's supported 24.x major and overrides a differing dashboard selection. No dashboard settings are changed by editing this repository. Latest local checks use the existing Node 26.12.1 / npm 11.20.0; Node 26 is outside the declared target, and Node 24 verification remains pending. Switch to Node 24 before a fresh dependency installation to avoid an engine mismatch warning.
+- Monaco editor with ISA highlighting, diagnostics, undo/redo, find and a plain-text fallback.
+- Create, UTF-8 ASM/TXT upload, source download, examples and browser-local draft autosave.
+- Two-pass assembler with labels, source maps, structured diagnostics and little-endian machine code.
+- All 19 CPU instructions, checked memory/register access, atomic faults and cumulative execution limits.
+- Assemble, Run, Step, Pause and Reset; source breakpoints, Run to Cursor and three execution speeds.
+- Live registers, bounded signed/hex memory inspector, disassembly and changed-value indicators.
+- A 500-attempt execution trace with filters, historical inspection, navigation and JSON export.
+- Fourteen predefined fixtures and custom tests with snapshots, exact assertions, expected faults and cancellation.
+- Custom-test editing, duplication, confirmed deletion, local persistence and versioned JSON import/export.
+- Dark responsive workbench, keyboard controls and 100-item pages for large test expectations/results.
+
+## Technology and architecture
+
+Next.js App Router, React, TypeScript, Tailwind CSS, Monaco, Lucide and ESLint. Tests use Node's native test runner and TypeScript stripping, without an additional browser test framework.
+
+Parser, assembler, CPU and test engine are React-independent TypeScript modules. The workspace controller owns the live debugger CPU; test cases use separate private CPUs. Bounded scheduled batches publish compact views rather than copying all memory every instruction. There is no application backend, authentication, database, analytics or external instruction-execution service.
+
+```text
+src/lib/assembler/   ISA metadata, parsing, symbols, encoding and both passes
+src/lib/cpu/         Private state, checked access, decoding and execution
+src/lib/workspace/   Scheduler, breakpoints, cursor goals, trace and display views
+src/lib/testing/     Validation, assertions, isolated sessions, fixtures and management
+src/lib/editor/      Source documents, autosave, language and panel navigation
+src/components/     Editor, toolbars, inspectors, documentation and test panels
+tests/              Real engine integration, controller and UI-render regressions
+docs/               ISA, testing contracts and manual release guide
+```
+
+## CPU and assembly language
+
+| Item | ISA v1 behavior |
+| --- | --- |
+| A, B | Signed 32-bit registers; arithmetic wraps in two's complement |
+| Memory | 65,536 signed words, addresses 0–65,535; shared code/data/stack |
+| PC | Next instruction word address, 0–65,535 |
+| SP | Checked pointer, 0–65,536; initial 65,536 is the empty descending stack |
+| Initial registers | A=B=PC=0; SP=65,536 |
+| Instruction | Low 8-bit opcode + signed 24-bit operand; four little-endian bytes |
+| Operand range | −8,388,608 through 8,388,607 |
+| Branch/call labels | Displacement relative to the next instruction |
+| HALT | Counts one attempt and retains its PC |
+| Fault | Counts the attempt; register/memory changes do not commit |
+| Budget | Default 100,000 attempts; configurable 1–10,000,000 |
+
+Opcodes, in order:
+
+```text
+0 ldc    1 adc    2 ldl    3 stl    4 ldnl   5 stnl
+6 add    7 sub    8 shl    9 shr   10 adj   11 a2sp
+12 sp2a  13 call  14 return 15 brz  16 brlz 17 br   18 HALT
+```
+
+Use one instruction per line, case-insensitive mnemonics, case-sensitive labels, semicolon comments and signed decimal/hex literals. Labels may precede instructions and reference later labels. The separate `data` directive emits a signed 32-bit word; it is not a CPU opcode. MOV, CMP, PUSH and stdin/stdout are unsupported. Shift counts must be 0–31. See the [normative ISA](docs/ISA_DESIGN.md) for exact operands, register effects, call/return links and fault rules.
+
+## Run locally
+
+Use **Node.js 24.x** and npm 10+. No private environment variables or credentials are needed. On a fresh checkout:
 
 ```powershell
-cd C:\Zekrui\assembly-emulator
+git clone https://github.com/Krish290107/assembly-emulator.git
+Set-Location assembly-emulator
+node --version
+npm --version
 npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. To verify and run a production build:
+Open `http://localhost:3000`. In an existing checkout, run commands from the project root. `npm ci` installs locked dependencies into `node_modules` and uses npm's normal cache; it does not install Node. It is unnecessary merely to verify an already installed working environment.
+
+Monaco and its worker are served locally. The install/predev/prebuild script prepares ignored `public/monaco` assets from installed packages and aligns Monaco's vendored ESM sanitizer with the installed DOMPurify override. No CDN, font download or private service is needed for the build. Review that package-layout integration when upgrading Monaco.
+
+For production, stop the dev server before using the same checkout's build output:
+
+```powershell
+npm run build
+npm start
+```
+
+## Editor and debugger workflow
+
+Write source, upload an `.asm`/`.txt` file up to 1 MiB, or choose an example. **Assemble** validates and loads without execution; failures show line/column diagnostics. Highlighting alone does not validate assembly. Source edits invalidate the loaded image immediately: reassemble before running.
+
+| Action | Shortcut / behavior |
+| --- | --- |
+| Run / Resume | F5; terminal programs require Reset/reassembly |
+| Step | F10; one attempted instruction, including at a breakpoint |
+| Reset | Shift+F5; restore image/registers, clear attempts/history, speed Normal |
+| Toggle breakpoint | F9 in source editor, or click Monaco glyph gutter |
+| Download source | Ctrl+S |
+| Create blank source | Ctrl+N, with replacement guard |
+| Monaco Tab focus mode | Ctrl+M |
+
+Shortcuts are scoped to the ready IDE and excluded from dialogs/unrelated inputs. Held debugger keys do not repeat commands. Breakpoints stop before execution without consuming attempts; Resume bypasses the current stop once and triggers again on later visits. Reset preserves breakpoint definitions; source edits clear them. Run to Cursor is available from the toolbar/Monaco context menu and does not create permanent breakpoints.
+
+Slow/Normal/Fast change scheduling only (maximum 1/64/512 attempts per batch, requested delays 200/32/16 ms). These are not guaranteed execution rates. Pause, Reset, edits and leaving the workspace cancel stale callbacks.
+
+Memory shows at most 32 cells with signed/hex values. Jump accepts decimal/hex addresses, including 0 and 65,535. Program, PC, SP and page controls navigate bounded windows. Disassembly displays at most 64 current words. Modified words are marked and unreliable source highlighting is suppressed.
+
+Execution Trace retains the last **500 attempted instructions**, including HALT/faults, with before/after registers, committed memory deltas and diagnostics. Select rows or use native buttons/Previous/Next; filters change presentation only. Inspection never changes the live CPU. Download Trace exports all retained entries and discarded-count metadata; older/cleared history cannot be recovered. There is no time-travel execution.
+
+## Test cases and local data
+
+Open **Test Cases** to inspect/run one predefined fixture or **Run all predefined (14)**. Fixtures cover arithmetic, signed overflow, memory/stack access, branches, a countdown, call/return, HALT, an expected fault/limit and initial memory.
+
+**Create custom test** copies the current editor source into a snapshot. Supply a unique name, optional description and selected A/B/PC/SP or memory expectations. Blank register fields are unasserted; zero is explicit. Memory fields use one `address = value` per line. Optional attempts, budgets and initial memory inputs use checked architecture ranges. Copy current editor source replaces a snapshot only on request. Edit invalidates its old result; Duplicate and confirmed Delete manage definitions.
+
+Default completion requires HALT. Expected faults require `error` and the exact diagnostic code, such as `C005_INVALID_ADDRESS`; expected limits require `limit-reached`. Unexpected faults/limits, assembly/setup failure and cancellation cannot pass. Every case gets a fresh CPU, independent of editor/debugger state. Suites run sequentially, yielding after at most 256 attempts per callback. Cancel or close the panel to stop unfinished work.
+
+Custom definitions save locally when changed; results are session-only. Export requests `assembly-emulator-tests.json`, containing `{ "format": "assembly-emulator-tests", "version": 1, "tests": [...] }`. Import accepts UTF-8 `.json` up to **2 MiB**, **100 cases**, **1 MiB source per case**. Merge retains existing cases and renames conflicts; Replace requires confirmation. Duplicate IDs/names within a file reject the import. Imports never execute automatically. Full schema/API: [TESTING.md](docs/TESTING.md).
+
+The browser stores one current source draft and a separate custom-test collection. Storage belongs to the browser/profile/origin, can be cleared or fail, and is not a backup/version history. Tabs do not synchronize. Corrupt/newer saved tests are protected against automatic overwrite; quota failures keep changes in memory. Export backups before explicitly replacing protected data. Closing a panel discards unsaved form edits and result history.
+
+## Text demo
+
+### A. Basic execution
+
+Paste this into the editor (download existing work first), then select **Assemble**, **Run**:
+
+```asm
+ldc 10
+adc 5
+HALT
+```
+
+Expected: **A=15, B=0, PC=2, SP=65,536, three attempts, halted**. Reset and Step: first attempt gives A=10/PC=1; second gives A=15/PC=2; third executes HALT at PC=2. HALT counts as an instruction attempt.
+
+### B. Debugging
+
+With demo A assembled/reset, toggle a breakpoint on line 2 using the gutter or F9. Run stops before `adc 5`, with A=10 and one attempt. Resume finishes with A=15 and three attempts. Reset, remove that breakpoint, put the cursor on line 3 and select **Run to cursor**: pause before HALT at PC=2/two attempts. Step executes HALT. Open Execution Trace and select the first attempt: historical A=10 while the live CPU stays at A=15. Try filters and Download Trace.
+
+### C. Memory
+
+```asm
+ldc 42
+ldc 100
+stnl 0
+HALT
+```
+
+The second `ldc` leaves A=100 and B=42. `stnl 0` writes B to address A+0, so **Memory[100]=42**. Assemble/Run, then jump to `100` (`0x64`) in Memory: signed 42 and hex `0000002A`. The program halts at PC=3 after four attempts. Step through the store to inspect its changed-memory indicator and trace write delta.
+
+### D. Test cases
+
+1. Run all 14 predefined fixtures. Expected negative fault/limit cases count as PASS when matched.
+2. Put demo A in the editor. Create `Addition demo`, expected A=15, completion HALT and attempts=3; save and Run. Expect PASS.
+3. Edit expected A to 20. Save clears the old result. Run: FAIL, expected 20, actual 15.
+4. Add/duplicate a second custom case with a distinct name, then **Run all custom**. Totals reflect real outcomes.
+5. Export custom tests, inspect JSON, then import with **Merge** and review the rename/count confirmation. Cancel confirmation when merely demonstrating it to avoid duplicates. Use Replace only when deliberately replacing backed-up data. Invalid files must preserve the collection.
+
+## Verification and CI
 
 ```powershell
 npm run lint
 npm run typecheck
 npm test
 npm run build
-npm start
+npm audit --omit=dev
+git diff --check
 ```
 
-Monaco is bundled from ESM source, and its plain-text worker is copied from the npm package into generated `public/monaco` during installation and before development/build. The editor and worker are served locally, with no CDN or external API. Generated assets are ignored by Git. No fonts or other runtime assets require an external service. A DOMPurify override selects a patched release. The preparation script also replaces Monaco's vendored ESM sanitizer with that installed release (preserving its license), because an npm override alone does not update the vendored copy. Review this package-layout integration when upgrading Monaco.
+The 512-test baseline covers real engine integration, faults/limits, cancellation, debugger isolation, storage/JSON boundaries and rendered controls. UI event/timer tests do not replace physical browser checks. Local verification uses existing Node **26.12.1 / npm 11.20.0**, outside the Node 24 target. Exact outcomes and remaining checks: [VERIFICATION.md](VERIFICATION.md).
 
-## Implemented features
+[CI workflow](.github/workflows/ci.yml) runs on pushes to `main` and pull requests targeting `main`: Ubuntu, `actions/checkout@v7`, `actions/setup-node@v7`, Node 24.x, `npm ci`, lint, types, tests, build and production audit. It has read-only permissions, no persisted Git credentials, no package caching, a 20-minute timeout and no deployment/release steps or custom secrets.
 
-- Compact dark IDE, responsive CPU/memory inspectors, resizable results panel, and keyboard-accessible result tabs.
-- Client-only Monaco with line numbers, ISA v1 highlighting, find, undo, indentation, and normal keyboard editing. Ctrl+M toggles Tab focus mode. Mount timeout or import/render failure offers a plain-text fallback with cursor tracking. Accepted file replacement starts fresh undo history; ordinary edits retain undo/redo.
-- Create a blank file; upload UTF-8 `.asm`/`.txt` files up to and including 1 MB; download current source as `.asm`. Malformed UTF-8, binary controls, invalid extensions, oversized files, and read failures show a notice. Download filenames are normalized and bounded, including Windows reserved names.
-- Ctrl+S requests a source download; Ctrl+N uses guarded Create. F5 runs/resumes, F10 steps once, Shift+F5 resets; F9 toggles a breakpoint in Monaco or the fallback source editor. Shortcuts apply only while focus is in the ready IDE, outside dialogs and unrelated inputs (including Monaco find fields), and pause during upload. Held keys do not repeat debugger commands; disabled commands consume the IDE key without executing or refreshing the page. Browser shortcuts outside the IDE and modifier variants remain untouched.
-- Browser-local draft autosave after 400 ms, restoration after refresh, and saving on page hide. Storage failures show a notice. An unreadable/corrupt draft is not overwritten until you edit or accept a replacement. Downloads provide a portable backup.
-- Create/upload/example replacement asks for confirmation when nonempty source differs from the last download requested in this session. Restored nonempty drafts are protected too. Cancelling keeps current source; undo history is not a substitute for a backup.
-- Separate closeable documentation and Test Cases panels with section jump navigation. Native modal dialogs provide focus containment, Escape dismissal, and focus restoration. Six guide sections include all 19 opcode definitions, syntax, architecture, and the internal test-definition rules.
-- Parser-valid ISA v1 examples: addition, a countdown with forward/backward labels, and a full-width data constant. Existing saved source is preserved; older MOV/HLT drafts are not migrated or deleted.
-- Real CPU registers/status/attempts, bounded memory and machine-code windows, source diagnostics, and high-level execution messages. No fabricated execution data or custom test pass/fail results.
+After you push, GitHub-hosted runners may download actions, Node and locked npm dependencies to their temporary workspace/cache. Those remote downloads do not install anything on Windows. **Node 24 CI remains PENDING until the real workflow succeeds for your commit.**
 
-Assemble, Run, Step, Pause, Reset, source breakpoints, and Slow/Normal/Fast speed are connected to the real engines. Test Cases actions use the real isolated engine. Memory shows signed decimal and hexadecimal together. Highlighting does not validate source. Download status confirms a browser download request, not that the user saved a file.
+## Limits and future possibilities
 
-## Browser workflow
+Assembly success does not prove runtime validity. Memory/control-flow checks occur during execution; data words may decode as instructions. Validation/assembly/serialization are synchronous within input limits, while CPU execution yields. Runtime state and breakpoints are not restored from draft storage. Files are UTF-8; download notices confirm requests rather than completed saves.
 
-1. Write source or choose an example, then **Assemble**. Success reports total instruction/data words, bytes, symbols, and a loaded CPU with zero attempts. Failure clears the executable image and shows line/column diagnostics in Errors and Monaco.
-2. **Step** attempts one instruction. **Run** continues the current ready/paused image; **Pause** cancels pending work before another batch. HALT, faults, and exhausted budgets require **Reset** or reassembly to restart. The reference `ldc 10`, `adc 5`, `HALT` finishes with A=15, B=0, PC=2, SP=65,536, three attempts, halted.
-3. **Reset** restores the loaded image/registers, clears attempts/runtime diagnostics/history and temporary cursor goals, and returns speed to **Normal**, preserving source and permanent breakpoints. Editing or accepting Create/upload/example replacement clears the CPU and binary immediately; Run/Step require reassembly. Undoing back to old source does not resurrect stale machine state.
-4. Inspect A/B/PC/SP and attempt count. Memory displays at most 32 signed/hex words; navigate by decimal/0x address, Previous/Next, Program (word 0), PC, or SP (empty-stack SP shows the last 32 cells). Jumping to 65,535 displays the final single cell; invalid addresses show a notice and never wrap. Changed cells have a dot as well as background highlighting, including at PC. Disassembly pages at most 64 current-memory words with decoded bits and original source lines. Data may decode as valid instructions. Modified words are marked; current-line editor highlighting is suppressed when bits no longer match the original image.
-
-The controller owns one private CPU session. Slow uses 1 attempt/200 ms, Normal 64/32 ms, and Fast 512/16 ms; these are maximum batches and timer delays, not guaranteed instruction rates. Speed remains available in narrow layouts. Every batch yields through a client timer, and pause/reset/reassembly/source changes/unmount invalidate old callbacks. Speed changes scheduling only; CPU semantics and its cumulative 100,000-attempt default budget are unchanged. Initial and Reset speed is Normal. The UI displays Running while scheduled execution is active; the CPU is paused between batches. Pausing before the first batch leaves the unexecuted CPU ready.
-
-Visualization uses a detached compact CPU overview plus checked reads for the visible windows, with no full memory copy per instruction/render. Changed values show differences since the previous refresh. Output retains only 20 event messages; Execution Trace holds bounded instruction history. Test Cases remains a separate closeable panel with predefined/custom execution. The plain-text editor fallback retains execution and Errors output but has no Monaco markers/decorations. Browser interaction verification is recorded in `VERIFICATION.md`.
-
-## Debugging
-
-- Click Monaco's glyph gutter or press **F9** to toggle a source breakpoint. Open **Execution Trace** or the small debugger toolbar button to enter a line number, enable/disable, remove, clear, or navigate to breakpoints. This keyboard-accessible list works with the fallback editor too. Enabled dots are red, disabled dots outlined, unresolved dots dim; the current instruction has a separate blue highlight.
-- Assembly resolves only exact CPU instruction lines to validated word addresses. Inline labels work; label-only, comment, blank, and `data` lines remain non-executable with an explanation. Definitions before assembly are pending. Addresses are deduplicated. **Reset preserves definitions and enabled flags**, while **source edits/replacements clear them**. Reassembling unchanged source re-resolves definitions. Breakpoints are session-local, not persisted with drafts.
-- **Run** stops before an enabled breakpoint without changing CPU state, consuming an attempt, or adding a trace entry. Run again passes the stopped address once; a later loop revisit still stops. **Step** attempts exactly one instruction even at a breakpoint. The existing generation token and single timer cancel stale work. The controller checks PC before every attempt within each bounded batch and publishes the view once per batch.
-- Each real attempt records its cumulative number, pre-execution PC, actual fetched word and decoded operand, compact before/after registers, any committed memory-write delta, result, and fault diagnostic. HALT and faulting attempts count; budget checks and breakpoint stops do not. No full memory snapshot is retained per attempt. `stepCpuTraced` extends the shared CPU attempt/commit path; the controller owns history separately from the legacy CPU snapshot's empty `trace` collection.
-- A fixed ring retains the **last 500 attempts**, drops the oldest, and displays the discarded count. Clear trace empties history without changing CPU state or cumulative attempts. Reset, reassembly and source edits clear history. Selecting a retained step shows register changes, stores, source and fault details; Go to source moves the editor cursor. **Inspection does not rewind or replay the CPU.**
-- Self-modified fetched bits are marked `*`, comparing with reset memory (including zero-filled cells beyond the image). Breakpoints stay bound to their original instruction word addresses and show a modification notice. Trace source links and current-line highlights require bits matching the assembled image; modified history has no source link. Source statements can include numeric/symbolic operands while trace instructions show the actual decoded numeric operand.
-
-### Day 10 Run to Cursor and trace navigation
-
-Place the editor cursor on an instruction line, then use **Run to cursor** in the main execution toolbar or Monaco's **Run to Cursor** context-menu action. The toolbar also works with the fallback editor and opens Execution Trace for target/status feedback. Assembly must be current and the CPU ready or paused. Invalid, comment, blank, label-only and `data` lines are rejected with an explanation; inline instructions resolve to their exact word address. A target at the current PC stops immediately without a timer or attempt.
-
-The temporary target never creates or changes permanent breakpoints. The existing scheduler stops **before** that instruction; the stop consumes no attempt and creates no trace entry. Earlier breakpoints stop first, leaving the goal pending; **Run** resumes toward it. **Pause** (also enabled at an intervening breakpoint), **Cancel target**, **Step**, Reset, reassembly, source replacement/edit and unmount cancel the pending goal. Speed changes retain it. Step then attempts exactly one instruction. HALT, faults and cumulative limits terminate normally and clear the goal; unreachable targets do not extend the budget. If the final permitted instruction reaches the target, its limit result takes precedence. A target sharing a permanent breakpoint stops once; Resume bypasses that address once and subsequent loop visits trigger the permanent breakpoint. Modified target words stay at their original assembled address and display a notice.
-
-Execution Trace offers **All attempts**, **Memory writes**, **Branch / control flow**, and **Faults / terminal events**. Writes means committed stores (including stores of an unchanged value). Control flow includes decoded call, return, brz, brlz, br and HALT, including untaken conditional branches. Terminal events include faults, HALT and limit-reached attempts. Classification uses the actual fetched instruction/result, not source text. Filters never change the 500-entry ring, CPU or cumulative attempt IDs.
-
-Click anywhere on a row, or activate its native Step button using Enter/Space, to highlight it and reveal historical details. **Previous/Next** select the nearest matching attempt before/after the selection; without a selection Next chooses the first match. An empty filter explains that nothing matches. If a filter hides the selected row, its details remain available with a notice. If retention evicts the selected attempt, its details disappear. Go to source remains available only for reliable mappings. Selection does not rewind execution, and execution refreshes do not repeatedly scroll the details.
-
-### Day 11 shortcuts, trace export and fault context
-
-Use **F5** for Run/Resume, **F10** for one Step and **Shift+F5** for Reset. **F9** toggles the source cursor's breakpoint. These keys are captured inside the active IDE before Monaco handles them, so one press invokes one command; autorepeat is ignored. F9 works only in the source editor; execution keys also work on ordinary IDE controls. Native dialogs, unrelated text/select fields, composition and browser modifier shortcuts are excluded. Terminal programs require Reset/reassembly before F5/F10 can execute again. Toolbar tooltips show the execution keys. The breakpoint list marks the current hit explicitly; its red marker remains distinct from the blue active-PC indication.
-
-**Download Trace** requests `assembly-emulator-trace.json` locally, with no external service. It exports **all retained entries**, regardless of filter or selection, with original attempt/PC/fetched word, decoded mnemonic/opcode/operand when valid, before/after registers, committed memory deltas, result/error/source and modification flags. Invalid instructions retain their raw word and diagnostic rather than an invented decode. Metadata declares format version 1, the 500-entry cap, retained count and discarded count since the last clear. Discarded and manually cleared history cannot be recovered; clearing history never renumbers later attempts. No full-memory snapshots or executable replay state are exported. A download-request notice does not confirm the file was saved.
-
-Errors retain their structured codes, messages and source spans. Runtime context adds the faulting PC and fetched instruction/word where available, plus the relevant memory address, SP, target PC or shift count. Limit messages show the stopped PC and cumulative attempts without claiming another fetched instruction. Faults remain atomic and cannot be reported as successful execution.
-
-## Day 3 parser
-
-`parseSource(source)` in `src/lib/assembler/parser.ts` scans text into label-only, instruction, and data statements with structured diagnostics and exclusive source spans. It handles comments, line endings, case-insensitive mnemonics, case-sensitive labels, signed decimal/hex literals, operand counts/ranges, and recovery after malformed lines. Valid lines remain available when other lines fail. It neither resolves symbols nor emits machine code. The full pipeline displays its diagnostics when Assemble runs; parsing is not performed on every keystroke.
-
-ISA v1 uses signed 32-bit A/B and memory words, 65,536 word-addressed cells, and a descending stack with initial SP 65,536. Instructions carry an 8-bit low opcode and signed 24-bit operand, serialized as four little-endian bytes by the assembler. Branch/call symbol references are relative to the next instruction. The `data` directive holds one signed 32-bit literal and is separate from the 19 CPU opcodes. Full CPU behavior, including call/return links, wrapping, shifts, faults, and execution limits, is in the ISA document.
-
-## Day 4 first assembler pass
-
-`firstPass(parseSource(source))` in `src/lib/assembler/first-pass.ts` returns a case-sensitive symbol map with source ranges, located statements, word count, diagnostics, success/failure status, and unresolved references tagged for future absolute/relative resolution. It accepts forward references and distinct labels at one location. Duplicate definitions report both locations and retain the first binding.
-
-Allocation starts at word 0; each valid instruction/data consumes one word, and labels consume none. Malformed parser lines contribute neither words nor labels; recovered valid lines remain inspectable, but any error prevents success. Exactly 65,536 words fit. Overflow and labels at address 65,536 are rejected without wrapping. Partial results include only in-range symbols/statements, while the word count includes excess words. All symbol operands stay unresolved in this pass; the full pipeline resolves them next.
-
-## Day 5 complete assembler
-
-Import `assembleSource` from `src/lib/assembler/index.ts`. It runs the existing parser and first pass, then `secondPass` to resolve operands and serialize the image. Absolute symbols become word addresses; call/brz/brlz/br symbols become offsets from the next instruction. Numeric operands retain their literal value. The encoder validates signed 24-bit instruction operands and signed 32-bit data before writing four little-endian bytes per word. Operand-free instructions encode a zero payload.
-
-```ts
-import { assembleSource } from "./src/lib/assembler/index.ts";
-
-const result = assembleSource("ldc 10\nadc 5\nHALT");
-if (result.status === "success") {
-  console.log([...result.program.bytes]);
-  // [0, 10, 0, 0, 1, 5, 0, 0, 18, 0, 0, 0]
-}
-```
-
-Those words are `00000A00`, `00000501`, and `00000012` in hex. The success result contains origin-zero `Uint8Array` bytes, a symbol map, diagnostics, and one source-map entry per emitted word (byte offsets 0/4/8 here, length 4, full source-statement ranges). Labels emit no bytes. Failures collect source-specific diagnostics and expose neither a program nor symbols. Undefined references are checked independently; parser/first-pass errors stop encoding. Empty source assembles successfully to zero bytes, which is not a runnable program. Data-only images are legal assembly.
-
-The API is pure and independent of React/browser APIs. The browser controller calls it from Assemble, then loads the image without execution. Existing file handling, autosave, and replacement guards remain independent.
-
-## Day 6 CPU foundation
-
-`src/lib/cpu/index.ts` exposes `createCpu`, `loadProgram`, `resetCpu`, `getCpuSnapshot`, `decodeInstruction`, and `fetchInstruction`, plus checked memory/register setup and execution-limit helpers. Cold state is A/B/PC 0, SP 65,536, zero-filled `Int32Array(65536)`, zero attempts, and idle status. Memory is word-addressed; SP alone may point one past its end.
-
-Loading validates origin 0, aligned byte length, and the 262,144-byte capacity before changing state. It owns a copy of the bytes and source mappings, reads little-endian signed words, clears unused memory, resets registers/count, and sets ready for a nonempty image or idle for an empty one. Failed loads preserve the prior state and reset image. Reset restores the latest successful image, clears memory/register changes and bookkeeping collections, and retains the configured execution limit.
-
-```ts
-import { assembleSource } from "./src/lib/assembler/index.ts";
-import { createCpu, loadProgram, readMemory, fetchInstruction } from "./src/lib/cpu/index.ts";
-
-const assembled = assembleSource("ldc 10\nHALT");
-const cpu = createCpu();
-if (assembled.status === "success" && loadProgram(cpu, assembled.program).ok) {
-  console.log(readMemory(cpu, 0)); // { ok: true, value: 2560 }
-  console.log(fetchInstruction(cpu));
-  // { ok: true, value: { word: 2560, opcode: 0, mnemonic: "ldc", operand: 10 } }
-}
-```
-
-This inspects loaded bits without executing `ldc`: A/B/PC remain 0, SP remains 65,536, and attempts remain 0. Decoding checks all 19 opcodes, signed 24-bit operands, and zero payloads on operand-free instructions. Standalone decoding accepts signed or unsigned 32-bit representations and preserves the input number; fetched words are signed. Invalid data encodings may load successfully and fail only when decoded.
-
-CPU handles keep memory and the saved image private. `getCpuSnapshot` explicitly deep-copies state, including 256 KiB memory and program metadata; changing the snapshot or original binary cannot corrupt the CPU. `readMemory`/`writeMemory` and `writeRegister` validate values before access. These setup/inspection operations return `{ ok: true, value }` or a structured `{ ok: false, diagnostic }`; reset returns void. Fetch defaults to PC, accepts an optional word address for inspection, and changes no state. Execution limits default to 100,000 or a configured integer 1–10,000,000. See the ISA document for signatures, ownership details, and diagnostic codes.
-
-## Day 7 instruction execution
-
-`stepCpu(cpu)` executes one attempted instruction. `runCpuBatch(cpu, maxSteps)` uses the same semantics for an explicit integer bound of 1–10,000,000 attempts, stopping earlier on HALT, fault, or the cumulative CPU limit. Both return a detached `{ status, attempts, attemptedInstructions, diagnostics }` summary without copying memory. `attempts` counts this call; `attemptedInstructions` is the cumulative count. Ordinary Step or batch completion leaves the CPU paused; ready/paused CPUs can continue. Idle and terminal CPUs execute nothing. Invalid batch bounds return a request diagnostic without changing CPU state.
-
-```ts
-import { assembleSource } from "./src/lib/assembler/index.ts";
-import { createCpu, loadProgram, runCpuBatch, getCpuSnapshot } from "./src/lib/cpu/index.ts";
-
-const assembled = assembleSource("ldc 10\nadc 5\nHALT");
-const cpu = createCpu();
-if (assembled.status === "success" && loadProgram(cpu, assembled.program).ok) {
-  const result = runCpuBatch(cpu, 10);
-  console.log(result.status, result.attemptedInstructions); // halted, 3
-  console.log(getCpuSnapshot(cpu).registers); // { A: 15, B: 0, PC: 2, SP: 65536 }
-}
-```
-
-All 19 instruction effects follow the unchanged ISA table. Arithmetic wraps signed 32-bit values; shifts validate counts 0–31 before bit operations. Addresses, SP, and next PC are checked as mathematical integers. Effects use old registers and commit together only after validation, including pending memory stores. A fault counts its attempt, records a structured diagnostic, and sets error while preserving registers/memory at the faulting PC. HALT preserves its PC and counts one attempt. Diagnostics include word/address/target and source range when available. The Day 9 traced API captures compact attempt records from this same execution path.
-
-Step and batches share one budget across pause/resume. An ordinary instruction using the final attempt commits then stops with limit-reached; HALT/fault take precedence. Exhausted budgets are checked before another fetch. Reset/load are the only operations that reset attempts and restore execution eligibility. Raising a terminal CPU's limit or changing registers/memory does not resume it; limits cannot be lowered below attempts already counted. Engine batches are synchronous; the controller schedules bounded breakpoint-aware work between browser turns.
-
-## Day 12 test-case engine
-
-`runTestCase(definition)` and `runTestSuite(definitions)` in `src/lib/testing/index.ts` return promises containing structured PASS/FAIL results. Each JSON-compatible definition owns its `source`, unique `id`, `name`, register/memory `assertions`, and optional description, initial values, completion expectations and execution limit. [TESTING.md](docs/TESTING.md) documents the complete schema, incremental APIs, diagnostics and 14 verified fixtures.
-
-```ts
-import { runTestCase } from "./src/lib/testing/index.ts";
-
-const result = await runTestCase({
-  id: "addition", name: "Add five", source: "ldc 10\nadc 5\nHALT",
-  assertions: [{ target: "register", register: "A", expected: 15 }],
-  expectedAttempts: 3,
-});
-// Real execution: PASS, halted, A=15, PC=2, three attempts.
-```
-
-HALT is the default required completion. Explicit negative tests require `expectedStatus: "error"` plus the exact `expectedFaultCode`, or `expectedStatus: "limit-reached"`. Exact comparisons check only declared state/attempt expectations. Invalid definitions, assembly/setup failures, empty programs, cancellation and unexpected faults fail. Duplicate assertion targets and suite IDs are rejected. Results retain diagnostics and expected/actual values, including for multiple mismatches.
-
-Every case assembles into a fresh private CPU. Checked initial memory/register inputs are applied after loading; the debugger and original image remain untouched. Execution uses at most **256 attempts per advance**, with a default **100,000-attempt** cumulative budget and validated limits up to 10,000,000. Async APIs yield between batches/cases and accept an AbortSignal; incremental sessions expose `advance`, `getProgress` and `cancel`. Suites run sequentially in declaration order. Results copy all four registers and only asserted memory cells, without full-memory snapshots per step. Validation, assembly and setup remain synchronous.
-
-The fixtures cover constants, arithmetic/overflow, memory, stack addressing, branching, a countdown loop, call/return, HALT, an expected memory fault, an expected limit, and initial memory. The browser panel connects these APIs; direct browser acceptance checks remain pending.
-
-## Architecture
-
-```text
-src/app/                  App Router page, metadata, global styles
-src/components/editor/    Client-loaded Monaco and editor frame
-src/components/layout/    Workspace composition and status bar
-src/components/panels/    CPU, memory, results, documentation, tests
-src/components/toolbar/   File actions and live execution controls
-src/lib/editor/           Document I/O, autosave hook, examples, language
-src/lib/assembler/        ISA metadata, scanner, parser, both passes, and public API
-src/lib/cpu/              Private CPU state, loading/reset, validation, decode, and execution
-src/lib/testing/          Definition validation, isolated execution, assertions, suites, and fixtures
-src/lib/workspace/        Execution controller, breakpoint mapping, trace ring, markers, React adapter
-src/types/                UI/source types and React-independent engine contracts
-scripts/                  Local Monaco asset preparation
-tests/                    Node tests for documents, engines, UI handlers, and workspace integration
-```
-
-UI state stays in React; the client controller connects a private CPU handle to bounded display projections through an external-store hook. There is no state-management library, authentication, database, backend, or external API. The standard Next.js build is compatible with Vercel; no deployment setup or account operations are performed.
-
-## Verification and limitations
-
-`npm test` preserves all 373 Day 1–11 tests and adds focused test-engine validation, assertion, fault/limit, cancellation, isolation, suite and fixture integration coverage. Only scheduling and UI event delivery are simulated; assembler/CPU results are real. UI-handler/render tests use installed React and TypeScript, with no new framework or browser dependency. `npm run typecheck` also checks positive/negative engine and testing contracts. Engine imports use `.ts` paths with `allowImportingTsExtensions` for native Node tests. These tests do not replace browser interaction checks; actual results and pending checks are in `VERIFICATION.md`.
-
-Local storage belongs to this browser/profile/origin and contains one current draft. It is not a file system or version history. Private mode, quota limits, or clearing browser data can remove it; use Download for backups. Multiple tabs do not synchronize changes. Files are interpreted as UTF-8 text. A parser-success result proves syntax only. Assembly does not prove runtime validity: the CPU checks taken targets, memory accesses, SP changes, and decoded bits during execution. Runtime state is in memory and is not restored from browser draft storage.
-
-## Pausing after Day 13
-
-Day 13 adds custom management, local persistence and JSON transfer. Automated verification is recorded in VERIFICATION.md; browser and Node 24 checks remain pending. Day 14 has not started. Time travel and advanced watchpoints remain unavailable. No deployment or GitHub operations are part of this work.
+There is no stdin/stdout model, arbitrary ISA extension, time travel, watchpoint engine, backend storage or multi-tab synchronization. Future possibilities include worker-based parsing/execution and richer persistence, subject to separate design/tests. Browser acceptance and deployment evidence limits are recorded in VERIFICATION.md; local success does not imply production verification.
