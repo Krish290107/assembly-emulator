@@ -17,7 +17,7 @@ Day 15 prepares the project and Node 24 CI for release. **Node 24 CI and the pro
 - A 500-attempt execution trace with filters, historical inspection, navigation and JSON export.
 - Fourteen predefined fixtures and custom tests with snapshots, exact assertions, expected faults and cancellation.
 - Custom-test editing, duplication, confirmed deletion, local persistence and versioned JSON import/export.
-- Dark responsive workbench, keyboard controls and 100-item pages for large test expectations/results.
+- Dark responsive workbench, keyboard controls, custom-library search/10-case pages and 100-item pages for large test expectations/results.
 
 ## Technology and architecture
 
@@ -114,11 +114,13 @@ Open **Test Cases** to inspect/run one predefined fixture or **Run all predefine
 
 **Create custom test** copies the current editor source into a snapshot. Supply a unique name, optional description and selected A/B/PC/SP or memory expectations. Blank register fields are unasserted; zero is explicit. Memory fields use one `address = value` per line. Optional attempts, budgets and initial memory inputs use checked architecture ranges. Copy current editor source replaces a snapshot only on request. Edit invalidates its old result; Duplicate and confirmed Delete manage definitions.
 
+Optional **Initial A/B/PC/SP** fields set inputs after program loading, before execution; they are separate from expected registers. Blank uses the CPU default and clears an imported input; zero is explicit. A/B accept signed 32-bit values, PC 0–65,535 and SP 0–65,536. The version-1 JSON schema is unchanged. Search custom tests by name/description and browse ten cards per page; **Run all custom** still runs the full library in declaration order. Program/expectation and passing-result details mount only when expanded.
+
 Default completion requires HALT. Expected faults require `error` and the exact diagnostic code, such as `C005_INVALID_ADDRESS`; expected limits require `limit-reached`. Unexpected faults/limits, assembly/setup failure and cancellation cannot pass. Every case gets a fresh CPU, independent of editor/debugger state. Suites run sequentially, yielding after at most 256 attempts per callback. Cancel or close the panel to stop unfinished work.
 
 Custom definitions save locally when changed; results are session-only. Export requests `assembly-emulator-tests.json`, containing `{ "format": "assembly-emulator-tests", "version": 1, "tests": [...] }`. Import accepts UTF-8 `.json` up to **2 MiB**, **100 cases**, **1 MiB source per case**. Merge retains existing cases and renames conflicts; Replace requires confirmation. Duplicate IDs/names within a file reject the import. Imports never execute automatically. Full schema/API: [TESTING.md](docs/TESTING.md).
 
-The browser stores one current source draft and a separate custom-test collection. Storage belongs to the browser/profile/origin, can be cleared or fail, and is not a backup/version history. Tabs do not synchronize. Corrupt/newer saved tests are protected against automatic overwrite; quota failures keep changes in memory. Export backups before explicitly replacing protected data. Closing a panel discards unsaved form edits and result history.
+The browser stores one current source draft and a separate custom-test collection. Storage belongs to the browser/profile/origin, can be cleared or fail, and is not a backup/version history. Source autosave checks its saved baseline before writes, including page-exit/visibility flushes, and listens for other-tab changes. A conflict pauses autosave while keeping current editor text. Use **Download editor backup**, then confirmed **Reload saved draft** or **Overwrite saved draft**; editing alone does not remove protection. Corrupt source drafts also require explicit recovery. These checks do not merge edits or provide transactional multi-tab synchronization. Corrupt/newer saved tests are protected against automatic overwrite; quota failures keep changes in memory. Export backups before explicitly replacing protected data. Closing a panel discards unsaved form edits and result history.
 
 ## Text demo
 

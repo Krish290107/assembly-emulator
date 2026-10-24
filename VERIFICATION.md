@@ -1,3 +1,55 @@
+# Post-Day-15 maintenance — 24 October 2026
+
+Overall: **local quality gates PASS; affected browser workflows UNVERIFIED**. Started from clean `main` at `4ff1fa0` (`Day 15: Finalize Assembly Emulator release and Node 24 CI`). This is focused maintenance, not another development phase. All 512 baseline tests remain; 26 regression tests were added. No ISA/CPU, JSON schema, dependency, lockfile, CI or production configuration changes. No files deleted, packages/runtimes installed, browser data changed, commits, pushes or deployments.
+
+## Confirmed findings and fixes
+
+1. **Source autosave overwrite:** the previous persist API reproduced loss of a newer saved draft when a stale tab wrote its own restored source. The hook had no storage listener or pre-write comparison, including pagehide/beforeunload/visibility flushes. Each tab now retains its saved raw baseline, checks immediately before writes and observes other-tab storage events. Conflicts pause autosave and retain current editor text; editing/replacement does not bypass protection. A persistent recovery bar offers Download editor backup and confirmed Reload/Overwrite. Recovery rechecks the record captured before confirmation. Malformed original drafts stay protected until explicit recovery. Unchanged saves skip storage writes; quota failures keep content and can retry. Existing page-exit warnings cover unavailable/conflicted, undownloaded editor work. Events/listeners and debounce timers clean up normally.
+2. **Initial register form limitation:** imported A/B/PC/SP inputs existed in the schema but were read-only. Optional Initial A/B/PC/SP fields now populate, edit and clear those inputs independently of expected registers. Blank means default/unspecified; zero is explicit. Architecture bounds and decimal/signed hexadecimal validation apply with associated field errors. Version-1 JSON round-trips unchanged; real execution verifies supplied/cleared inputs affect the actual CPU as expected.
+3. **Library rendering/usability:** all custom cards and their collapsed program/result contents previously mounted. Custom search (name/description) and ten-card pages now preserve IDs/order and leave Run all custom on the full library. Collapsed program and passing-result bodies mount on expansion; failures initially expand. Existing 100-item assertion/result pages, full recorded results and suite totals remain. SSR regression observed ten cards for 100 definitions, no hidden source/input/result tables in collapsed details, and 100 result rows for expanded large failures. This is a rendering bound, not a measured browser-speed claim.
+
+Changed source: src/lib/editor/document.ts and use-source-document.ts; src/types/ide.ts; layout ide-workspace.tsx/status-bar.tsx; panels test-case-form.tsx/test-cases-content.tsx/tool-panel.tsx; src/lib/testing/form.ts; globals.css. Added src/lib/testing/library-view.ts and tests/maintenance.test.mjs. Extended tests/test-panel-render.test.mjs. Updated README, docs/TESTING.md, docs/RELEASE.md and this record. Required generated Monaco assets were rebuilt through the existing prebuild script; no generated file was manually edited or tracked.
+
+## Actual verification
+
+| Check | Result |
+| --- | --- |
+| npm run lint | **PASS**, zero warnings/errors |
+| npm run typecheck | **PASS** |
+| npm test | **538 passed, 0 failed, 0 skipped**; previous baseline 512, new tests 26 |
+| npm run build | **PASS**, Next.js 16.4.2 compilation/TypeScript/static generation, no build warnings |
+| npm audit --omit=dev | **PASS**, 0 reported production vulnerabilities |
+| git diff --check | **PASS** |
+| Manifest/lockfile and CI configuration review | Root dependencies/devDependencies/engines match; workflow retains Node 24.x, read-only permissions, locked install and quality gates |
+| Runtime | **Node 26.12.1 / npm 11.20.0**, only Node 26 on checked PATH |
+| Node 24 / production verification | **UNVERIFIED/PENDING acceptance**; no Node 24 execution or matching remote CI/deployment result established by this maintenance audit |
+
+The first restricted focused test command failed before execution with `spawn EPERM`. Retrying with permission for existing local Node child processes passed all 77 focused tests; subsequent complete runs passed. No test assertion failed. The last full run includes the additional delayed-storage-event regression and all 538 tests. Build likewise used existing local compiler child processes. No installation/download was needed; npm audit queried requested advisory metadata only.
+
+New coverage: stale tabs, delayed foreign-write events, pending/lifecycle save guards, deleted/cleared/corrupt records, confirmation races, read-only reload, blank drafts/no-op writes, quota/access failures; imported initial-register edit/clear/zero/bounds/invalid values, version-1 round-trip and real execution; empty/filtered/100-case pages and stable order; labeled initial controls and bounded/lazy detail rendering. Existing real-CPU/assembler/debugger/fixtures/cancellation/isolation tests all pass.
+
+## Issues not reproduced / reviewed scope
+
+No new import/export defect was found. Existing tests preserve version-1 round-trips, deterministic Merge renames and Replace behavior, duplicate ID/name rejection, malformed JSON/UTF-8/oversize rejection, partial storage recovery, prototype-key rejection and atomic invalid-import preservation. Reviewed UI code still confirms both Merge and Replace plans and never executes imports automatically. No imported JavaScript evaluation is present. Native confirmation/file-picker acceptance was not reverified. No external sample format was used to change the established schema.
+
+No new CPU/debugger semantic regression was reproduced. The complete suite exercises all 19 instructions, bounds/fault atomicity, attempts/limits, real PASS/FAIL results, independent test CPUs, shortcuts, breakpoints/Run to Cursor, trace selection/filter/export/500-entry retention, cancellation/disposal and memory views. Existing Monaco/fallback, upload/download/autosave paths were inspected and production build passes. React/SSR tests and code review do not establish physical browser input, accessibility, hydration or layout acceptance.
+
+Performance scope: custom card/detail mounting is now bounded as tested above; no real-browser benchmark was possible. Existing maximum-image and repeated 100-case suite regressions pass. Validation, source assembly, JSON serialization, expanded initial-input display and final assertion evaluation remain synchronous within existing limits. No confirmed timing bottleneck justified changing those algorithms or CPU batching. localStorage has no atomic compare-and-swap: baseline checks and foreign-write events detect conflicts, but do not provide transactional simultaneous-tab editing or automatic merges. Keep exported backups. Library paging may reset a card's local expansion/assertion-page position while preserving its definition/result.
+
+## Browser evidence and required manual checks
+
+Existing node_repl + @oai/sky Computer Use found Brave and the Assembly Emulator tab. Selecting it failed with **`coordinate input geometry is unavailable`**. Refreshed the returned window binding, activated it, observed the current tab index, then retried once; the same error recurred. Stopped browser automation. No fresh application screenshot, affected workflow input or browser timing was obtained; no native picker was opened or security restriction bypassed. **All fresh maintenance browser checks are UNVERIFIED.** Prior Day 14 observations below remain historical.
+
+After restoring supported input geometry, manually:
+
+1. Export important source first. Open the same local origin in two tabs. Edit/save in A, then edit B: B must retain its editor text, warn and preserve A's saved draft. Switch visibility/attempt navigation; no stale flush may overwrite it. Download B's backup, cancel recovery confirmations, then test confirmed reload/overwrite with disposable content. Restore the original source. Repeat corrupt-draft/quota scenarios only in a disposable profile.
+2. Import a disposable valid version-1 case using Merge. Edit/clear Initial A/B/PC/SP (including zero), save/export/reimport and verify expectations remain distinct. Run `adc 5 / HALT` with initial A=10 and expected A=15: PASS; clear initial A: actual 5/FAIL. Do not replace/delete real user tests.
+3. On an existing large library, search, clear search and use Previous/Next with keyboard. Verify Run all custom totals include nonmatching/off-page cases, and native Enter/Space expands program/PASS result details. Recheck summary/close/form controls and scrolling near 390px. Restore viewport/source and remove only approved audit data.
+4. Recheck basic debugger, persistence and console. Manually verify Merge/Replace confirmation cancellation, malformed/invalid import preservation and native import. If Windows URL verification blocks a picker/confirmation, stop that automated interaction; use a manual owner check without bypassing security.
+5. Follow [docs/RELEASE.md](docs/RELEASE.md): review/stage intended changes, manually commit/push, require actual Node 24 CI success for that SHA, then confirm Vercel Ready/SHA and production smoke tests. No CI/deployment success is inferred from the local Node 26 build.
+
+---
+
 # Day 15 final release preparation — 24 October 2026
 
 Overall status: **PARTIAL verification; local preparation PASS / READY TO PUSH**. This is not a published or production-verified release. Node 24 GitHub CI and same-commit production acceptance are **PENDING**. Fresh Day 15 browser acceptance is **UNVERIFIED**. Historical records below describe earlier checks and are not evidence of a new CI/deployment/browser run.

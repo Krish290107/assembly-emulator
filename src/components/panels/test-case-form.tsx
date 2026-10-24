@@ -6,7 +6,7 @@ import type { TestDefinition } from '@/types/testing';
 export function TestCaseForm({ id, source, test, existing, onSave, onClose }: { id: string; source: string; test?: TestDefinition; existing: readonly TestDefinition[]; onSave: (t: TestDefinition) => boolean; onClose: () => void }) {
   const [fields, setFields] = useState(() => fieldsFor(id, source, test)); const [errors, setErrors] = useState<Record<string,string>>({}); const prefix = useId();
   const update = (key: keyof TestFields, value: string) => setFields(f => ({ ...f, [key]: value }));
-  function input(key: Exclude<keyof TestFields,'initialRegisters'>, label: string, multiline = false) {
+  function input(key: keyof TestFields, label: string, multiline = false) {
     const props = { id: `${prefix}-${key}`, value: fields[key], onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => update(key, e.target.value), 'aria-invalid': !!errors[key], 'aria-describedby': errors[key] ? `${prefix}-${key}-error` : undefined };
     return <label className="test-field" key={key} htmlFor={props.id}>{label}{multiline ? <textarea {...props} rows={key === 'source' ? 7 : 3} spellCheck={false} /> : <input {...props} autoComplete="off" />}{errors[key] && <span id={`${prefix}-${key}-error`} className="test-error">{errors[key]}</span>}</label>;
   }
@@ -19,7 +19,7 @@ export function TestCaseForm({ id, source, test, existing, onSave, onClose }: { 
     <label className="test-field">Expected completion<select name="expected-status" value={fields.status} aria-invalid={!!errors.status} aria-describedby={errors.status ? `${prefix}-status-error` : undefined} onChange={e => setFields(f => ({...f,status:e.target.value,fault:''}))}><option value="halted">HALT</option><option value="error">Runtime error</option><option value="limit-reached">Limit reached</option></select>{errors.status && <span id={`${prefix}-status-error`} className="test-error">{errors.status}</span>}</label>
     {fields.status === 'error' && <label className="test-field">Exact fault code<select name="expected-fault-code" value={fields.fault} onChange={e => update('fault',e.target.value)} aria-invalid={!!errors.fault} aria-describedby={errors.fault ? `${prefix}-fault-error` : undefined}><option value="">Choose code</option>{TEST_FAULT_CODES.map(c => <option key={c}>{c}</option>)}</select>{errors.fault && <span id={`${prefix}-fault-error`} className="test-error">{errors.fault}</span>}</label>}
     {input('attempts','Expected attempts (optional)')}{input('budget','Budget (default 100,000; max 10,000,000)')}{input('initialMemory','Initial memory: one address = value per line',true)}
-    {fields.initialRegisters && <p>Imported initial registers preserved: {JSON.stringify(fields.initialRegisters)}</p>}
+    <p>Initial registers are inputs applied after loading, before execution. Blank uses the CPU default; zero is explicit.</p><div className="test-fields">{(['A','B','PC','SP'] as const).map(k => input(`initial${k}`,`Initial ${k} (optional)`))}</div>
     <div className="test-actions"><button type="submit">Save test</button><button type="button" onClick={onClose}>Cancel editing</button></div>
   </form>;
 }

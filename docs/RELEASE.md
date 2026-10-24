@@ -26,10 +26,15 @@ Require each check to succeed before continuing. Use Node 24 if already installe
 
 ## 2. Stage and inspect the exact change
 
-For the Day 15 files prepared here:
+For the post-Day-15 maintenance files prepared here:
 
 ```powershell
-git add -- .github/workflows/ci.yml README.md VERIFICATION.md docs/ISA_DESIGN.md docs/TESTING.md docs/RELEASE.md
+git add -- README.md VERIFICATION.md docs/TESTING.md docs/RELEASE.md
+git add -- src/app/globals.css src/types/ide.ts src/lib/editor/document.ts src/lib/editor/use-source-document.ts
+git add -- src/lib/testing/form.ts src/lib/testing/library-view.ts
+git add -- src/components/layout/ide-workspace.tsx src/components/layout/status-bar.tsx
+git add -- src/components/panels/test-case-form.tsx src/components/panels/test-cases-content.tsx src/components/panels/tool-panel.tsx
+git add -- tests/maintenance.test.mjs tests/test-panel-render.test.mjs
 git diff --cached --stat
 git diff --cached --check
 git diff --cached
@@ -45,7 +50,7 @@ After review, confirm branch `main` and the intended origin:
 ```powershell
 git remote -v
 git branch --show-current
-git commit -m "Prepare final documentation and Node 24 CI"
+git commit -m "Protect source drafts and improve custom test editing"
 $releaseCommit = git rev-parse HEAD
 git show --stat --oneline $releaseCommit
 git push origin main

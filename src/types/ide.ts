@@ -9,7 +9,7 @@ export interface AssemblyExample extends SourceDocument {
   description: string;
 }
 
-export type SaveState = "loading" | "saving" | "saved" | "unavailable";
+export type SaveState = "loading" | "saving" | "saved" | "unavailable" | "conflict";
 export type ToolPanel = "info" | "tests" | null;
 export type OutputTab = "output" | "errors" | "trace" | "disassembly";
 export type ExecutionAction = "assemble" | "run" | "step" | "pause" | "reset";

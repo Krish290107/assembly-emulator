@@ -60,6 +60,7 @@ svg { flex-shrink: 0; }
 .example-select option { background: #182231; color: var(--text); }
 .notice-bar { flex-shrink: 0; background: #1d2b3d; color: #c2d6f1; border-bottom: 1px solid #334b69; padding: 5px 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; }
 .notice-bar > span { min-width: 0; overflow-wrap: anywhere; }
+.source-recovery { flex-wrap: wrap; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 309px; flex: 1; min-height: 0; padding: 17px 19px 16px; gap: 15px; }
 .code-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--surface); }
 .execution-toolbar { min-height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--border); background: #141c28; }
