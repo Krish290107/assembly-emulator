@@ -15,12 +15,12 @@ export function EditorPane(props: AssemblyEditorProps & { filename: string; revi
     <section className="editor-pane" aria-label="Source editor">
       <div className="editor-tabbar">
         <div className="file-tab"><FileCode2 size={15} /><span title={props.filename}>{props.filename}</span>{props.modified && <span className="modified-dot" title="Source is being autosaved" />}</div>
-        <span className="editor-language">Assembly <span className="draft-tag">ISA v1</span></span>
+        <span className="editor-language">Assembly</span>
       </div>
       <div className="editor-surface">
         {props.ready ? <EditorBoundary key={props.revision} code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange} navigation={props.navigation}><AssemblyEditor code={props.code} onChange={props.onChange} onPositionChange={props.onPositionChange} diagnostics={props.diagnostics} currentLine={props.currentLine} breakpoints={props.breakpoints} onToggleBreakpoint={props.onToggleBreakpoint} onRunToCursor={props.onRunToCursor} navigation={props.navigation} /></EditorBoundary> : <div className="editor-loading" role="status">Restoring your workspace…</div>}
       </div>
-      <div className="editor-footnote"><span>ISA v1</span><span>Assemble to validate. Editing clears the loaded image. Current instruction is highlighted when mapped.</span></div>
+      <div className="editor-footnote">Editing requires reassembly.</div>
     </section>
   );
 }

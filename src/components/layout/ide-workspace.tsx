@@ -51,7 +51,7 @@ export function IdeWorkspace() {
       <a className="skip-link" href="#workspace">Skip to workspace</a>
       <header className="app-header">
         <div className="brand"><span className="brand-icon"><Terminal size={21} strokeWidth={1.8} /></span><h1>Assembly Emulator</h1></div>
-        <div className="header-meta"><span className="workspace-indicator" />Editor workspace<span className="header-divider" /><span>v0.1.0</span><button className="icon-button" aria-label="Open workspace documentation" aria-haspopup="dialog" aria-expanded={panel === "info"} onClick={() => setPanel("info")}><CircleHelp size={17} /></button></div>
+        <div className="header-meta"><button className="icon-button" aria-label="Open workspace documentation" aria-haspopup="dialog" aria-expanded={panel === "info"} onClick={() => setPanel("info")}><CircleHelp size={17} /></button></div>
       </header>
       <FileToolbar ready={source.ready} uploading={uploading} onUploadingChange={setUploading} onReplace={replaceDocument} onDownload={source.download} onPanel={setPanel} panel={panel} onNotice={source.setNotice} />
       {(source.saveState === "conflict" || source.saveState === "unavailable") && <div className="notice-bar source-recovery" role="region" aria-label="Draft recovery"><span>Autosave is protected or unavailable. Keep editing and download a backup before recovery.</span><div className="toolbar-group"><button className="tool-button" onClick={source.download}>Download editor backup</button><button className="tool-button" onClick={() => source.recoverDraft(false)}>Reload saved draft…</button><button className="tool-button" onClick={() => source.recoverDraft(true)}>Overwrite saved draft…</button></div></div>}

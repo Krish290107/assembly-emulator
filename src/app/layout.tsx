@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Assembly Emulator — Editor Workspace",
+  title: "Assembly Emulator",
   description: "A browser-local assembly editor, assembler, and educational CPU emulator with live registers, memory, and ISA v1 documentation.",
 };
 

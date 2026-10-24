@@ -28,7 +28,7 @@ export function OutputPanel({ view, onAddress, active, onTabChange: setActive, d
       }}><tab.icon size={14} />{tab.title}{tab.id === "errors" && view.diagnostics.length > 0 ? ` (${view.diagnostics.length})` : ""}</button>)}
     </div>
     {TABS.map((tab) => <div key={tab.id} role="tabpanel" id={`${id}-${tab.id}-panel`} aria-labelledby={`${id}-${tab.id}-tab`} hidden={active !== tab.id} tabIndex={0} className="result-content">
-      {tab.id === "output" && <><p className="result-summary">{view.assembled ? `${view.wordCount} words · ${view.wordCount * 4} bytes · ${view.symbolCount} symbols · ${view.status}` : "No current assembled image"}</p><ol className="event-log">{view.logs.map((message, index) => <li key={index}>{message}</li>)}</ol></>}
+      {tab.id === "output" && <><p className="result-summary">{view.assembled ? `${view.wordCount} words · ${view.wordCount * 4} bytes · ${view.symbolCount} symbols · ${view.status}` : "Not assembled"}</p><ol className="event-log">{view.logs.map((message, index) => <li key={index}>{message}</li>)}</ol></>}
       {tab.id === "errors" && (view.diagnostics.length ? <ul className="diagnostic-list">{view.diagnostics.map((diagnostic, index) => {
         const context = runtimeDiagnosticContext(diagnostic, view.cpu);
         return <li key={index}><strong>{diagnostic.code}</strong>{diagnostic.source && <span>Line {diagnostic.source.start.line}, column {diagnostic.source.start.column}</span>}<p>{diagnostic.message}</p>{context && <p className="diagnostic-context">{context}</p>}{diagnostic.related?.map((related, relatedIndex) => <p key={relatedIndex}>{related.message} Line {related.source.start.line}, column {related.source.start.column}.</p>)}</li>;
